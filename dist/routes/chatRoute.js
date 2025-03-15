@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const Middleware_1 = require("../lib/Utils/Middleware");
+const chatController_1 = require("../controllers/chatController");
+const Route = (0, express_1.Router)();
+const ADMIN = "admin";
+const SCHOOL = "school";
+const INSTRUCTOR = "instructor";
+Route.get("/users", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN, SCHOOL, INSTRUCTOR), chatController_1.getUsersForSidebar);
+Route.get("/:id", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN, SCHOOL, INSTRUCTOR), chatController_1.getConversation);
+Route.post("/send/:id", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN, SCHOOL, INSTRUCTOR), chatController_1.sendMessage);
+exports.default = Route;
