@@ -21,35 +21,40 @@ const ProgramRoutes_1 = __importDefault(require("./routes/ProgramRoutes"));
 const GalleryRoute_1 = __importDefault(require("./routes/GalleryRoute"));
 const chatRoute_1 = __importDefault(require("./routes/chatRoute"));
 const socket_1 = require("./lib/Utils/socket");
+const path_1 = __importDefault(require("path"));
 dotenv_1.default.config();
 // Mongodb Connection
 (0, Connection_1.connectDB)();
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5174";
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5174';
 socket_1.app.use((0, cors_1.default)({
-    origin: "http://localhost:5173",
+    origin: 'http://localhost:5173',
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
-socket_1.app.use("/api/donations/webhook", express_1.default.raw({ type: "application/json" }));
+socket_1.app.use('/api/donations/webhook', express_1.default.raw({ type: 'application/json' }));
 //middleware
 socket_1.app.use(express_1.default.json());
 socket_1.app.use(express_1.default.urlencoded({ extended: true }));
 socket_1.app.use((0, cookie_parser_1.default)());
 // api
-socket_1.app.use("/api/v1/user", authRoute_1.default);
-socket_1.app.use("/api/v1/video", videoRoute_1.default);
-socket_1.app.use("/api/v1/invoice", invoiceRoute_1.default);
-socket_1.app.use("/api/v1/adminInvoiceApproval", adminInvoiceApprovalRoute_1.default);
-socket_1.app.use("/api/v1/adminVideoApproval", adminVideoApporove_1.default);
-socket_1.app.use("/api/v1/school", schoolRoute_1.default);
-socket_1.app.use("/api/v1/userDonation", donationRoute_1.default);
-socket_1.app.use("/api/v1/library", libraryRoutes_1.default);
-socket_1.app.use("/api/v1/watchedVideo", WatchedVideo_1.default);
-socket_1.app.use("/api/v1/gallery", GalleryRoute_1.default);
-socket_1.app.use("/api/v1/program", ProgramRoutes_1.default);
-socket_1.app.use("/api/v1/chat", chatRoute_1.default);
+socket_1.app.use('/api/v1/user', authRoute_1.default);
+socket_1.app.use('/api/v1/video', videoRoute_1.default);
+socket_1.app.use('/api/v1/invoice', invoiceRoute_1.default);
+socket_1.app.use('/api/v1/adminInvoiceApproval', adminInvoiceApprovalRoute_1.default);
+socket_1.app.use('/api/v1/adminVideoApproval', adminVideoApporove_1.default);
+socket_1.app.use('/api/v1/school', schoolRoute_1.default);
+socket_1.app.use('/api/v1/userDonation', donationRoute_1.default);
+socket_1.app.use('/api/v1/library', libraryRoutes_1.default);
+socket_1.app.use('/api/v1/watchedVideo', WatchedVideo_1.default);
+socket_1.app.use('/api/v1/gallery', GalleryRoute_1.default);
+socket_1.app.use('/api/v1/program', ProgramRoutes_1.default);
+socket_1.app.use('/api/v1/chat', chatRoute_1.default);
 const PORT = process.env.PORT || 3000;
+socket_1.app.use(express_1.default.static(path_1.default.join(__dirname, '../build')));
+socket_1.app.use(function (req, res) {
+    res.sendFile(path_1.default.join(__dirname, '../build', 'index.html'));
+});
 socket_1.server.listen(PORT, () => {
     console.log(`Server Started at PORT:- ${PORT}`);
 });

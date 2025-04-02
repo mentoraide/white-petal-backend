@@ -21,7 +21,7 @@ export interface AuthRequest extends Request {
 
 // Initialize Stripe (Ensure to add your actual secret key)
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-01-27.acacia',
+  apiVersion: '2025-02-24.acacia',
 });
 
 export const createCheckoutSession = (req: AuthRequest, res: Response): Promise<void> => {
