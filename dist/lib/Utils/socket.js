@@ -14,7 +14,7 @@ const server = http_1.default.createServer(app);
 exports.server = server;
 const io = new socket_io_1.Server(server, {
     cors: {
-        origin: ["http://localhost:5173"],
+        origin: ["http://localhost:5173", "http://69.62.70.22:8000"],
     },
 });
 exports.io = io;
@@ -42,8 +42,10 @@ io.on("connection", (socket) => {
         const receiver = userSocketMap[receiverId];
         if (!sender || !receiver)
             return;
-        if ((sender.role === "Admin" && ["Instructor", "School"].includes(receiver.role)) ||
-            (["Instructor", "School"].includes(sender.role) && receiver.role === "Admin")) {
+        if ((sender.role === "Admin" &&
+            ["Instructor", "School"].includes(receiver.role)) ||
+            (["Instructor", "School"].includes(sender.role) &&
+                receiver.role === "Admin")) {
             const receiverSocketId = getReceiverSocketId(receiverId);
             if (receiverSocketId) {
                 io.to(receiverSocketId).emit("receiveMessage", { senderId, message });
@@ -64,7 +66,7 @@ io.on("connection", (socket) => {
     socket.on("disconnect", () => {
         console.log("A user disconnected", socket.id);
         if (userId && userSocketMap[userId]) {
-            userSocketMap[userId].socketIds = userSocketMap[userId].socketIds.filter(id => id !== socket.id);
+            userSocketMap[userId].socketIds = userSocketMap[userId].socketIds.filter((id) => id !== socket.id);
             if (userSocketMap[userId].socketIds.length === 0) {
                 delete userSocketMap[userId];
             }

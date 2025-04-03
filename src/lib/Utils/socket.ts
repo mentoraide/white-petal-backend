@@ -7,7 +7,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173"],
+    origin: ["http://localhost:5173", "http://69.62.70.22:8000"],
   },
 });
 
@@ -47,15 +47,20 @@ io.on("connection", (socket) => {
     if (!sender || !receiver) return;
 
     if (
-      (sender.role === "Admin" && ["Instructor", "School"].includes(receiver.role)) ||
-      (["Instructor", "School"].includes(sender.role) && receiver.role === "Admin")
+      (sender.role === "Admin" &&
+        ["Instructor", "School"].includes(receiver.role)) ||
+      (["Instructor", "School"].includes(sender.role) &&
+        receiver.role === "Admin")
     ) {
       const receiverSocketId = getReceiverSocketId(receiverId);
       if (receiverSocketId) {
         io.to(receiverSocketId).emit("receiveMessage", { senderId, message });
       }
     } else {
-      io.to(sender.socketIds).emit("errorMessage", "You are not allowed to message this user.");
+      io.to(sender.socketIds).emit(
+        "errorMessage",
+        "You are not allowed to message this user."
+      );
     }
   });
 
@@ -70,10 +75,12 @@ io.on("connection", (socket) => {
   // Handle disconnection
   socket.on("disconnect", () => {
     console.log("A user disconnected", socket.id);
-    
+
     if (userId && userSocketMap[userId]) {
-      userSocketMap[userId].socketIds = userSocketMap[userId].socketIds.filter(id => id !== socket.id);
-      
+      userSocketMap[userId].socketIds = userSocketMap[userId].socketIds.filter(
+        (id) => id !== socket.id
+      );
+
       if (userSocketMap[userId].socketIds.length === 0) {
         delete userSocketMap[userId];
       }
