@@ -5,14 +5,13 @@ interface Book extends Document {
     author: string;
     subject: string;
     keywords: string[];
-    pdfUrl: string;
-    coverImage:string;
-    description:string;
+    videoUrl: string; // changed from pdfUrl
+    coverImage: string;
+    description: string;
     uploadedBy: mongoose.Schema.Types.ObjectId;
-    isApproved: boolean; 
+    isApproved: boolean;
     approvedBy?: mongoose.Schema.Types.ObjectId;
 }
-
 
 const BookSchema = new Schema<Book>(
   {
@@ -20,7 +19,7 @@ const BookSchema = new Schema<Book>(
     author: { type: String, required: true },
     subject: { type: String, required: true },
     keywords: [{ type: String }],
-    pdfUrl: { type: String, required: true },
+    videoUrl: { type: String, required: true }, // changed from pdfUrl
     coverImage: {
       type: String,
       required: true
@@ -30,12 +29,29 @@ const BookSchema = new Schema<Book>(
       required: true
     },
     uploadedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    isApproved: { type: Boolean, default: false }, 
+    isApproved: { type: Boolean, default: false },
     approvedBy: { type: Schema.Types.ObjectId, ref: 'User' }
   },
   { timestamps: true }
 );
 
-BookSchema.index({ title: 'text', author: 'text', subject: 'text', keywords: 'text' });
+// ✅ Weighted text index for better search relevance
+BookSchema.index(
+  {
+    title: 'text',
+    author: 'text',
+    subject: 'text',
+    keywords: 'text'
+  },
+  {
+    weights: {
+      title: 10,
+      author: 5,
+      subject: 3,
+      keywords: 1
+    },
+    name: 'LibraryVideoTextIndex'
+  }
+);
 
-export default mongoose.model<Book>('Book', BookSchema);
+export default mongoose.model<Book>('LibraryVideo', BookSchema);

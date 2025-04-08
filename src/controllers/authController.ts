@@ -45,7 +45,6 @@ const register = (req: Request, res: Response): void => {
     bio,
   } = req.body;
 
-  // Ensure password and confirmPassword are provided and match
   if (!password || !confirmPassword) {
     res.status(ResponseCode.BAD_REQUEST).json({
       status: false,
@@ -55,18 +54,20 @@ const register = (req: Request, res: Response): void => {
   }
 
   if (password !== confirmPassword) {
-    res
-      .status(ResponseCode.BAD_REQUEST)
-      .json({ status: false, message: "Passwords do not match" });
+    res.status(ResponseCode.BAD_REQUEST).json({
+      status: false,
+      message: "Passwords do not match",
+    });
     return;
   }
 
   UserModel.findOne({ email })
     .then((existingUser) => {
       if (existingUser) {
-        res
-          .status(ResponseCode.CONFLICT)
-          .json({ status: false, message: "Email already exists" });
+        res.status(ResponseCode.CONFLICT).json({
+          status: false,
+          message: "Email already exists",
+        });
         return Promise.reject("Email already exists");
       }
 
@@ -80,7 +81,7 @@ const register = (req: Request, res: Response): void => {
         phone,
         address,
         bio,
-        approved: role === "admin" || role === "user" ? true : false,
+        // Let schema handle auto-approval
       });
 
       return user.save();
@@ -91,7 +92,6 @@ const register = (req: Request, res: Response): void => {
         message:
           "Registration successful. Awaiting admin approval if necessary.",
         user: {
-          id: user._id,
           _id: user._id,
           name: user.name,
           email: user.email,
@@ -124,67 +124,59 @@ const login = (
 
   UserModel.findOne({ email })
     .then((user) => {
-      if (!user) {
-        res
-          .status(ResponseCode.UNAUTHORIZED)
-          .json({ status: false, message: "Invalid credentials" });
-        return Promise.reject("Invalid credentials");
-      }
-
-      if (!bcrypt.compareSync(password, user.password)) {
-        res
-          .status(ResponseCode.UNAUTHORIZED)
-          .json({ status: false, message: "Invalid credentials" });
-        return Promise.reject("Invalid credentials");
-      }
-
-      // Fetch the latest user data
-      return UserModel.findById(user._id).then((updatedUser) => {
-        if (!updatedUser) {
-          res
-            .status(ResponseCode.UNAUTHORIZED)
-            .json({ status: false, message: "Invalid credentials" });
-          return Promise.reject("User not found");
-        }
-
-        // Ensure `approved` field is handled correctly
-        if (
-          (updatedUser.role === "instructor" ||
-            updatedUser.role === "school") &&
-          updatedUser.approved !== true
-        ) {
-          console.log("Admin approval pending:", updatedUser.approved);
-          res
-            .status(ResponseCode.FORBIDDEN)
-            .json({ status: false, message: "Admin approval pending." });
-          return Promise.reject("Admin approval pending");
-        }
-
-        //  Generate token after approval check
-        const token = createToken(updatedUser);
-        res.cookie("token", token, {
-          httpOnly: true,
-          secure: true,
-          sameSite: "strict",
+      if (!user || !bcrypt.compareSync(password, user.password)) {
+        res.status(ResponseCode.UNAUTHORIZED).json({
+          status: false,
+          message: "Invalid credentials",
         });
+        return Promise.reject("Invalid credentials");
+      }
 
-        //  Include user details in response
-        res.status(ResponseCode.SUCCESS).json({
-          status: true,
-          data: {
-            token,
-            user: {
-              id: updatedUser._id,
-              _id: updatedUser._id,
-              name: updatedUser.name,
-              email: updatedUser.email,
-              role: updatedUser.role,
-              profileImage: updatedUser.profileImage,
-              approved: updatedUser.approved,
-            },
+      return UserModel.findById(user._id);
+    })
+    .then((updatedUser) => {
+      if (!updatedUser) {
+        res.status(ResponseCode.UNAUTHORIZED).json({
+          status: false,
+          message: "Invalid credentials",
+        });
+        return Promise.reject("User not found");
+      }
+
+      if (
+        (updatedUser.role === "instructor" ||
+          updatedUser.role === "school") &&
+        updatedUser.approved !== true
+      ) {
+        res.status(ResponseCode.FORBIDDEN).json({
+          status: false,
+          message: "Admin approval pending.",
+        });
+        return Promise.reject("Admin approval pending");
+      }
+
+      const token = createToken(updatedUser);
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+      });
+
+      res.status(ResponseCode.SUCCESS).json({
+        status: true,
+        data: {
+          token,
+          user: {
+            id: updatedUser._id,
+            _id: updatedUser._id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            role: updatedUser.role,
+            profileImage: updatedUser.profileImage,
+            approved: updatedUser.approved,
           },
-          message: "Login successful",
-        });
+        },
+        message: "Login successful",
       });
     })
     .catch((error) => {
@@ -198,6 +190,7 @@ const login = (
       }
     });
 };
+
 
 // Forgot Password
 const forgotPassword = async (req: Request, res: Response): Promise<void> => {
@@ -306,12 +299,13 @@ const resetPassword = async (req: Request, res: Response): Promise<void> => {
 
 
 const approveUser = (req: AuthRequest, res: Response): void => {
-  if (req.user?.role == "school") {
+  if (req.user?.role === "school") {
     res
       .status(ResponseCode.FORBIDDEN)
       .json({ status: false, message: "Unauthorized" });
     return;
   }
+
   const { userId } = req.params;
 
   UserModel.findById(userId)
@@ -323,7 +317,16 @@ const approveUser = (req: AuthRequest, res: Response): void => {
         return Promise.reject("User not found");
       }
 
-      //  If already approved, return success message
+      // ❌ Prevent approval for 'user' role (they are auto-approved)
+      if (user.role === "user") {
+        res.status(ResponseCode.BAD_REQUEST).json({
+          status: false,
+          message: "Normal users do not require approval",
+        });
+        return Promise.reject("Normal user - no approval needed");
+      }
+
+      // ✅ Already approved
       if (user.approved) {
         res
           .status(ResponseCode.SUCCESS)
@@ -331,7 +334,7 @@ const approveUser = (req: AuthRequest, res: Response): void => {
         return Promise.reject("User already approved");
       }
 
-      // Approve the user and update database
+      // ✅ Approve the user
       user.approved = true;
       return user.save();
     })
@@ -343,13 +346,18 @@ const approveUser = (req: AuthRequest, res: Response): void => {
       }
     })
     .catch((error) => {
-      if (error !== "User not found" && error !== "User already approved") {
+      if (
+        error !== "User not found" &&
+        error !== "User already approved" &&
+        error !== "Normal user - no approval needed"
+      ) {
         res
           .status(ResponseCode.SERVER_ERROR)
           .json({ status: false, message: "Error approving user" });
       }
     });
 };
+
 
 //  Reject User (Admin Only)
 const rejectUserbyAdmin = (req: AuthRequest, res: Response): void => {

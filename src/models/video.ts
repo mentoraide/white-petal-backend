@@ -4,6 +4,7 @@ interface Video extends Document {
     courseName: string; 
     courseContent: string; 
     videoUrl: string; 
+    rank:string;
     description: string;
     status: "pending" | "approved" | "rejected";
     uploadedBy: mongoose.Types.ObjectId; 
@@ -29,6 +30,11 @@ const VideoSchema = new Schema<Video>(
         videoUrl: {
             type: String,
             required: true
+        },
+
+        rank:{
+        type:String,
+        required:true,
         },
 
         description: {
