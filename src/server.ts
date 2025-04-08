@@ -15,6 +15,7 @@ import libraryRoute from "./routes/libraryRoutes";
 import watchedVideoRoute from "./routes/WatchedVideo";
 import ProgramRoute from "./routes/ProgramRoutes";
 import GalleryRoute from "./routes/GalleryRoute";
+import videoSettingRoutes from "./routes/videoSettingRoutes";
 import chatRoutes from "./routes/chatRoute";
 import { app, server } from "./lib/Utils/socket";
 import path from "path";
@@ -53,6 +54,7 @@ app.use("/api/v1/watchedVideo", watchedVideoRoute);
 app.use("/api/v1/gallery", GalleryRoute);
 app.use("/api/v1/program", ProgramRoute);
 app.use("/api/v1/chat", chatRoutes);
+app.use("/api/v1/VideoSetting", videoSettingRoutes);
 
 const PORT = process.env.PORT || 3000;
 
