@@ -7,8 +7,8 @@ interface AuthenticatedRequest extends Request {
   files?: { [fieldname: string]: Express.Multer.File[] } | Express.Multer.File[];
 }
 
-// 📌 Upload Book Controller (Now uploads video)
-export const uploadLibraryVideo= (req: AuthenticatedRequest, res: Response): Promise<void> => {
+// 📌 Upload Library Video
+export const uploadLibraryVideo = (req: AuthenticatedRequest, res: Response): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ error: "Unauthorized" });
     return Promise.resolve();
@@ -33,7 +33,7 @@ export const uploadLibraryVideo= (req: AuthenticatedRequest, res: Response): Pro
         throw new Error("File upload to Cloudinary failed");
       }
 
-      const newBook = new LibraryVideo ({
+      const newVideo = new LibraryVideo({
         title,
         author,
         subject,
@@ -42,20 +42,20 @@ export const uploadLibraryVideo= (req: AuthenticatedRequest, res: Response): Pro
         videoUrl: videoResult.secure_url,
         coverImage: coverImageResult.secure_url,
         uploadedBy: req.user!.id,
-        isApproved: false,
+        isApproved: true, // ✅ always approved
       });
 
-      return newBook.save();
+      return newVideo.save();
     })
-    .then((savedBook) => {
-      res.status(201).json({ message: "video uploaded successfully!", video: savedBook });
+    .then((savedVideo) => {
+      res.status(201).json({ message: "Video uploaded successfully!", video: savedVideo });
     })
     .catch((error) => {
       res.status(500).json({ error: "Internal server error", details: error });
     });
 };
 
-// ✅ Update Book with New Video & Cover Image Handling
+// ✅ Update Library Video
 export const updateLibraryVideo = (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id } = req.params;
   const { title, author, subject, keywords, description } = req.body;
@@ -72,9 +72,9 @@ export const updateLibraryVideo = (req: AuthenticatedRequest, res: Response): Pr
         : req.files['coverImage']?.[0])
     : undefined;
 
-  return LibraryVideo .findById(id)
-    .then((book) => {
-      if (!book) throw new Error('Library Video not found');
+  return LibraryVideo.findById(id)
+    .then((video) => {
+      if (!video) throw new Error('Library Video not found');
 
       const updateData: any = { title, author, subject, description };
       if (keywords) {
@@ -99,11 +99,11 @@ export const updateLibraryVideo = (req: AuthenticatedRequest, res: Response): Pr
         if (videoResult) updateData.videoUrl = videoResult.secure_url;
         if (imageResult) updateData.coverImage = imageResult.secure_url;
 
-        return LibraryVideo .findByIdAndUpdate(id, updateData, { new: true });
+        return LibraryVideo.findByIdAndUpdate(id, updateData, { new: true });
       });
     })
-    .then((updatedBook) => {
-      res.json({ message: 'Library Video updated successfully', video: updatedBook });
+    .then((updatedVideo) => {
+      res.json({ message: 'Library Video updated successfully', video: updatedVideo });
     })
     .catch((err) => {
       res.status(500).json({ error: err.message });
@@ -112,42 +112,7 @@ export const updateLibraryVideo = (req: AuthenticatedRequest, res: Response): Pr
   return Promise.resolve();
 };
 
-
-// ✅ Approve LibraryVideo (Only Admins)
-export const approveLibraryVideo = (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  if (!req.user || req.user.role !== 'admin') {
-    res.status(403).json({ message: 'Only admins can approve Library Video' });
-    return Promise.resolve();
-  }
-
-  LibraryVideo.findByIdAndUpdate(req.params.id, { isApproved: true, approvedBy: req.user.id }, { new: true })
-    .then((book) => {
-      if (!book) res.status(404).json({ message: 'Video not found' });
-      else res.json({ message: 'Library Video approved successfully', book });
-    })
-    .catch((err) => res.status(500).json({ error: err.message }));
-
-  return Promise.resolve();
-};
-
-// ✅ Reject LibraryVideo (Only Admins)
-export const rejectLibraryVideo = (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  if (!req.user || req.user.role !== 'admin') {
-    res.status(403).json({ message: 'Only admins can reject Library Video' });
-    return Promise.resolve();
-  }
-
-  LibraryVideo.findByIdAndUpdate(req.params.id, { isApproved: false, approvedBy: req.user.id }, { new: true })
-    .then((book) => {
-      if (!book) res.status(404).json({ message: 'Library Video not found' });
-      else res.json({ message: 'Library Video reject successfully', book });
-    })
-    .catch((err) => res.status(500).json({ error: err.message }));
-
-  return Promise.resolve();
-};
-
-// ✅ Get Books
+// ✅ Get All Library Videos (with filters)
 export const getLibraryVideo = (req: Request, res: Response): Promise<void> => {
   const { search, title, author, subject, keyword } = req.query;
 
@@ -168,37 +133,39 @@ export const getLibraryVideo = (req: Request, res: Response): Promise<void> => {
   return Promise.resolve();
 };
 
-
-// ✅ Get Single Book by ID
+// ✅ Get Single Video by ID
 export const getLibraryVideoById = (req: Request, res: Response): Promise<void> => {
-  LibraryVideo .findById(req.params.id)
-    .then((book) => book ? res.json({ book }) : res.status(404).json({ message: 'Library Video not found' }))
+  LibraryVideo.findById(req.params.id)
+    .then((video) => video ? res.json({ video }) : res.status(404).json({ message: 'Library Video not found' }))
     .catch((err) => res.status(500).json({ error: err.message }));
 
   return Promise.resolve();
 };
 
-// ✅ Get All Books with Pagination
+// ✅ Get All Videos with Pagination
 export const getAllLibraryVideo = (req: Request, res: Response): Promise<void> => {
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
   const skip = (page - 1) * limit;
 
-  LibraryVideo .find()
+  LibraryVideo.find()
     .skip(skip)
     .limit(limit)
-    .then((books) => res.json({ books, total: books.length, page, limit }))
+    .then((videos) => res.json({ videos, total: videos.length, page, limit }))
     .catch((err) => res.status(500).json({ error: err.message }));
 
   return Promise.resolve();
 };
 
-
-// ✅ Delete Book
+// ✅ Delete Library Video
 export const deleteLibraryVideo = (req: AuthenticatedRequest, res: Response): Promise<void> => {
   LibraryVideo.findByIdAndDelete(req.params.id)
-    .then((deletedBook) => deletedBook ? res.json({ message: 'Library Video deleted successfully' }) : res.status(404).json({ message: 'Library Video not found' }))
-    .catch((err: { message: any; }) => res.status(500).json({ error: err.message }));
+    .then((deletedVideo) =>
+      deletedVideo
+        ? res.json({ message: 'Library Video deleted successfully' })
+        : res.status(404).json({ message: 'Library Video not found' })
+    )
+    .catch((err) => res.status(500).json({ error: err.message }));
 
   return Promise.resolve();
 };
