@@ -5,8 +5,6 @@ export interface AuthRequest extends Request {
     user?: any;
 }
 
-
-
 export const requestProgram = async (req: AuthRequest, res: Response) => {
     try {
         const { contactPerson, email, phone, programRequested, message } = req.body;

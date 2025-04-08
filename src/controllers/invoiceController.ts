@@ -6,6 +6,7 @@ import nodemailer from "nodemailer";
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
+import VideoModel from "../models/video";
 
 dotenv.config();
 
@@ -101,22 +102,43 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
         return;
     }
 
-    const { invoiceNumber, dueDate, instructorDetails, companyDetails, services, subTotal, taxRate, taxAmount, discount, grandTotal, email, paymentDetails, status, notes } = req.body;
+    const {
+        invoiceNumber,
+        dueDate,
+        instructorDetails,
+        companyDetails,
+        services,
+        subTotal,
+        taxRate,
+        taxAmount,
+        discount,
+        grandTotal,
+        email,
+        paymentDetails,
+        status,
+        notes,
+        videoIds, // NEW FIELD
+    } = req.body;
 
-    if (!invoiceNumber || !dueDate || !instructorDetails || !companyDetails || !services || subTotal === undefined || taxRate === undefined || taxAmount === undefined || grandTotal === undefined || !email || !paymentDetails || !status) {
+    if (
+        !dueDate || !instructorDetails || !companyDetails || !services ||
+        subTotal === undefined || taxRate === undefined || taxAmount === undefined ||
+        grandTotal === undefined || !email || !paymentDetails || !status || !videoIds
+    ) {
         res.status(400).json({ message: "All required fields must be provided" });
         return;
     }
 
     try {
         const lastInvoice = await InvoiceModel.findOne().sort({ createdAt: -1 });
-        let invoiceNumber = "INV-1001";
-        if (lastInvoice && lastInvoice.invoiceNumber) {
+        let invoiceNum = "INV-1001";
+        if (lastInvoice?.invoiceNumber) {
             const lastNumber = parseInt(lastInvoice.invoiceNumber.split("-")[1], 10);
-            invoiceNumber = `INV-${lastNumber + 1}`;}
-            
+            invoiceNum = `INV-${lastNumber + 1}`;
+        }
+
         const invoice = await new InvoiceModel({
-            invoiceNumber,
+            invoiceNumber: invoiceNum,
             dueDate,
             instructor: req.user._id,
             instructorDetails,
@@ -131,8 +153,11 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
             paymentDetails,
             status,
             notes,
+            videoIds, // 💾 Save video IDs in invoice
         }).save();
 
+
+        // 📄 PDF generation and Email sending
         const invoicesDir = path.join(__dirname, "../public/invoices");
         if (!fs.existsSync(invoicesDir)) {
             fs.mkdirSync(invoicesDir, { recursive: true });
@@ -166,9 +191,11 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
             }
         });
     } catch (error) {
+        console.error("Error creating invoice:", error);
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
+
 
 export const getInvoiceById = (req: AuthRequest, res: Response): void => {
     InvoiceModel.findById(req.params.invoiceId)

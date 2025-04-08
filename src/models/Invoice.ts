@@ -44,6 +44,7 @@ interface Invoice extends Document {
     notes?: string;
     email: string;
     pdfUrl?: string; 
+    videoIds: mongoose.Types.ObjectId[];
     createdAt: Date;
 }
 
@@ -87,10 +88,11 @@ const InvoiceSchema = new Schema<Invoice>({
         ifscCode: { type: String },
         upiId: { type: String },
     },
-    status: { type: String, enum: ["pending", "paid"], default: "pending" },
+    status: { type: String, enum: ["pending", "paid", "Approved"], default: "pending" },
     notes: { type: String },
     email: { type: String, required: true },
     pdfUrl: { type: String },
+    videoIds: [{ type: Schema.Types.ObjectId, ref: "Video" }],
     createdAt: { type: Date, default: Date.now },
 },{timestamps:true});
 

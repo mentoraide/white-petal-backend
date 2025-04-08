@@ -8,6 +8,12 @@ interface AuthRequest extends Request {
     user?: IUser;
 }
 
+interface CustomUser {
+    _id: string;
+    name?: string;
+    email?: string;
+  }
+
 // Upload Video with Thumbnail
 export const uploadVideo = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -44,7 +50,7 @@ export const uploadVideo = async (req: AuthRequest, res: Response): Promise<void
             videoUrl: videoUpload.secure_url, 
             description: req.body.description,
             status: req.body.status || "pending",
-            uploadedBy: req.user._id,
+            uploadedBy: (req.user as CustomUser)._id,
             watchedBy: [],
             thumbnailUrl: thumbnailUpload.secure_url,
         });
