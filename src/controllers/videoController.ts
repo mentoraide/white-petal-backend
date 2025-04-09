@@ -78,16 +78,18 @@ export const getVideoById = (req: Request, res: Response): void => {
 
 // View All Videos
 export const getAllVideos = (req: Request, res: Response): void => {
-    try{
+    try {
         VideoModel.find()
-        .select("courseName courseContent videoUrl status description uploadedBy thumbnailUrl")
-        .populate("uploadedBy", "name email bio profilePicture")
-        .then((videos) => res.json(videos))
-        .catch((error) => res.status(400).json({ message: error.message }));
-    }catch(e:any){
-        res.status(500).json({message : e.message})
+            .select("courseName courseContent videoUrl status description uploadedBy thumbnailUrl isPriced rank")
+            .populate("uploadedBy", "name email bio profilePicture")
+            .then((videos) => res.json(videos))
+            .catch((error) => res.status(400).json({ message: error.message }));
+    } catch (e: any) {
+        res.status(500).json({ message: e.message });
     }
 };
+
+
 
 // Update Video with Optional Video & Thumbnail Upload
 export const updateVideo = (req: AuthRequest, res: Response): void => {
