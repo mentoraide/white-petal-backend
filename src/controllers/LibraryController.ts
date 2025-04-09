@@ -63,13 +63,19 @@ export const updateLibraryVideo = (req: AuthenticatedRequest, res: Response): Pr
   const videoFile = req.files
     ? (Array.isArray(req.files)
         ? req.files.find(file => file.fieldname === 'video')
-        : req.files['video']?.[0])
+        : (req.files['video'] as Express.Multer.File[])?.[0])
     : undefined;
 
   const coverImageFile = req.files
     ? (Array.isArray(req.files)
         ? req.files.find(file => file.fieldname === 'coverImage')
-        : req.files['coverImage']?.[0])
+        : (req.files['coverImage'] as Express.Multer.File[])?.[0])
+    : undefined;
+
+  const thumbnailFile = req.files
+    ? (Array.isArray(req.files)
+        ? req.files.find(file => file.fieldname === 'thumbnail')
+        : (req.files['thumbnail'] as Express.Multer.File[])?.[0])
     : undefined;
 
   return LibraryVideo.findById(id)
@@ -95,9 +101,16 @@ export const updateLibraryVideo = (req: AuthenticatedRequest, res: Response): Pr
               access_mode: 'public',
             })
           : null,
-      ]).then(([videoResult, imageResult]) => {
+        thumbnailFile
+          ? cloudinary.v2.uploader.upload(thumbnailFile.path, {
+              folder: 'library_books/thumbnails',
+              access_mode: 'public',
+            })
+          : null,
+      ]).then(([videoResult, imageResult, thumbnailResult]) => {
         if (videoResult) updateData.videoUrl = videoResult.secure_url;
         if (imageResult) updateData.coverImage = imageResult.secure_url;
+        if (thumbnailResult) updateData.thumbnail = thumbnailResult.secure_url;
 
         return LibraryVideo.findByIdAndUpdate(id, updateData, { new: true });
       });

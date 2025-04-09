@@ -72,16 +72,19 @@ const register = (req: Request, res: Response): void => {
       }
 
       const hashedPassword = bcrypt.hashSync(password, 10);
+      const userRole = role || "user";
+      const isNormalUser = userRole === "user";
+
       const user = new UserModel({
         name,
         email,
         password: hashedPassword,
-        role: role || "user",
+        role: userRole,
         schoolId,
         phone,
         address,
         bio,
-        // Let schema handle auto-approval
+        approved: isNormalUser ? true : false, // 👈 auto-approve only normal users
       });
 
       return user.save();
@@ -90,7 +93,9 @@ const register = (req: Request, res: Response): void => {
       res.status(ResponseCode.SUCCESS).json({
         status: true,
         message:
-          "Registration successful. Awaiting admin approval if necessary.",
+          user.role === "user"
+            ? "Registration successful."
+            : "Registration successful. Awaiting admin approval.",
         user: {
           _id: user._id,
           name: user.name,
@@ -114,6 +119,7 @@ const register = (req: Request, res: Response): void => {
       }
     });
 };
+
 
 // Login User
 const login = (
