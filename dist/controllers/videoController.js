@@ -76,7 +76,7 @@ exports.getVideoById = getVideoById;
 const getAllVideos = (req, res) => {
     try {
         video_1.default.find()
-            .select("courseName courseContent videoUrl status description uploadedBy thumbnailUrl")
+            .select("courseName courseContent videoUrl status description uploadedBy thumbnailUrl isPriced rank")
             .populate("uploadedBy", "name email bio profilePicture")
             .then((videos) => res.json(videos))
             .catch((error) => res.status(400).json({ message: error.message }));
@@ -96,7 +96,8 @@ const updateVideo = (req, res) => {
     if (!files) {
         console.error("No files received");
     }
-    const { courseName, courseContent, description } = req.body;
+    //   console.log(req.body);
+    const { courseName, courseContent, description, rank } = req.body;
     const updateFields = {};
     if (courseName)
         updateFields.courseName = courseName;
@@ -104,12 +105,20 @@ const updateVideo = (req, res) => {
         updateFields.courseContent = courseContent;
     if (description)
         updateFields.description = description;
+    if (rank)
+        updateFields.rank = rank;
     // Upload video & thumbnail if provided
     const videoPromise = (files === null || files === void 0 ? void 0 : files.video)
-        ? Cloundinary_1.default.uploader.upload(files.video[0].path, { resource_type: "video", folder: "instructor_videos" })
+        ? Cloundinary_1.default.uploader.upload(files.video[0].path, {
+            resource_type: "video",
+            folder: "instructor_videos",
+        })
         : Promise.resolve(null);
     const thumbnailPromise = (files === null || files === void 0 ? void 0 : files.thumbnail)
-        ? Cloundinary_1.default.uploader.upload(files.thumbnail[0].path, { folder: "thumbnails", transformation: [{ width: 300, height: 200, crop: "fill" }] })
+        ? Cloundinary_1.default.uploader.upload(files.thumbnail[0].path, {
+            folder: "thumbnails",
+            transformation: [{ width: 300, height: 200, crop: "fill" }],
+        })
         : Promise.resolve(null);
     Promise.all([videoPromise, thumbnailPromise])
         .then(([videoUpload, thumbnailUpload]) => {
@@ -119,16 +128,22 @@ const updateVideo = (req, res) => {
             updateFields.thumbnailUrl = thumbnailUpload.secure_url;
         return video_1.default.findByIdAndUpdate(req.params.id, { $set: updateFields }, { new: true });
     })
-        .then(updatedVideo => {
+        .then((updatedVideo) => {
         if (!updatedVideo) {
-            res.status(404).json({ message: "Video not found or unauthorized update attempt" });
+            res
+                .status(404)
+                .json({ message: "Video not found or unauthorized update attempt" });
             return;
         }
-        res.status(200).json({ message: "Video updated successfully", updatedVideo });
+        res
+            .status(200)
+            .json({ message: "Video updated successfully", updatedVideo });
     })
-        .catch(error => {
+        .catch((error) => {
         console.error("Error updating video:", error);
-        res.status(500).json({ message: "Internal server error", error: error.message });
+        res
+            .status(500)
+            .json({ message: "Internal server error", error: error.message });
     });
 };
 exports.updateVideo = updateVideo;
@@ -156,7 +171,9 @@ const getInstructorProfile = (req, res) => {
             return;
         }
         if (!video.uploadedBy) {
-            res.status(404).json({ message: "Instructor not found or not assigned" });
+            res
+                .status(404)
+                .json({ message: "Instructor not found or not assigned" });
             return;
         }
         res.json(video.uploadedBy);

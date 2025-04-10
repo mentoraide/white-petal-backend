@@ -91,20 +91,23 @@ const createInvoice = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         res.status(401).json({ message: "Unauthorized: User not found in request" });
         return;
     }
-    const { invoiceNumber, dueDate, instructorDetails, companyDetails, services, subTotal, taxRate, taxAmount, discount, grandTotal, email, paymentDetails, status, notes } = req.body;
-    if (!invoiceNumber || !dueDate || !instructorDetails || !companyDetails || !services || subTotal === undefined || taxRate === undefined || taxAmount === undefined || grandTotal === undefined || !email || !paymentDetails || !status) {
+    const { invoiceNumber, dueDate, instructorDetails, companyDetails, services, subTotal, taxRate, taxAmount, discount, grandTotal, email, paymentDetails, status, notes, videoIds, // NEW FIELD
+     } = req.body;
+    if (!dueDate || !instructorDetails || !companyDetails || !services ||
+        subTotal === undefined || taxRate === undefined || taxAmount === undefined ||
+        grandTotal === undefined || !email || !paymentDetails || !status || !videoIds) {
         res.status(400).json({ message: "All required fields must be provided" });
         return;
     }
     try {
         const lastInvoice = yield Invoice_1.default.findOne().sort({ createdAt: -1 });
-        let invoiceNumber = "INV-1001";
-        if (lastInvoice && lastInvoice.invoiceNumber) {
+        let invoiceNum = "INV-1001";
+        if (lastInvoice === null || lastInvoice === void 0 ? void 0 : lastInvoice.invoiceNumber) {
             const lastNumber = parseInt(lastInvoice.invoiceNumber.split("-")[1], 10);
-            invoiceNumber = `INV-${lastNumber + 1}`;
+            invoiceNum = `INV-${lastNumber + 1}`;
         }
         const invoice = yield new Invoice_1.default({
-            invoiceNumber,
+            invoiceNumber: invoiceNum,
             dueDate,
             instructor: req.user._id,
             instructorDetails,
@@ -119,7 +122,9 @@ const createInvoice = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             paymentDetails,
             status,
             notes,
+            videoIds, // 💾 Save video IDs in invoice
         }).save();
+        // 📄 PDF generation and Email sending
         const invoicesDir = path_1.default.join(__dirname, "../public/invoices");
         if (!fs_1.default.existsSync(invoicesDir)) {
             fs_1.default.mkdirSync(invoicesDir, { recursive: true });
@@ -152,6 +157,7 @@ const createInvoice = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         });
     }
     catch (error) {
+        console.error("Error creating invoice:", error);
         res.status(500).json({ message: "Internal Server Error" });
     }
 });

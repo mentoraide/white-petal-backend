@@ -34,53 +34,17 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const VideoSchema = new mongoose_1.Schema({
-    courseName: {
+// 2. Create the schema
+const videoSettingSchema = new mongoose_1.Schema({
+    pricePerVideo: {
         type: String,
         required: true
     },
-    courseContent: {
+    maxVideoLength: {
         type: String,
         required: true
-    },
-    videoUrl: {
-        type: String,
-        required: true
-    },
-    description: {
-        type: String,
-        required: true
-    },
-    status: {
-        type: String,
-        enum: ["pending", "approved", "rejected"],
-        default: "pending"
-    },
-    uploadedBy: {
-        type: mongoose_1.Schema.Types.ObjectId,
-        ref: "User",
-        required: true
-    },
-    watchedBy: [{
-            type: mongoose_1.Schema.Types.ObjectId,
-            ref: "User"
-        }],
-    thumbnailUrl: {
-        type: String,
-        required: true
-    },
-    sequence: {
-        type: Number,
-        default: 1
-    },
-    isPriced: {
-        type: Boolean,
-        default: false
-    },
-    rank: {
-        type: String,
-        default: ""
-    }
+    }, // in minutes
 }, { timestamps: true });
-const VideoModel = mongoose_1.default.model("Video", VideoSchema);
-exports.default = VideoModel;
+// 3. Create the model with types
+const VideoSetting = mongoose_1.default.model("VideoSetting", videoSettingSchema);
+exports.default = VideoSetting;

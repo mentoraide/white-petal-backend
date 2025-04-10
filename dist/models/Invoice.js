@@ -74,10 +74,11 @@ const InvoiceSchema = new mongoose_1.Schema({
         ifscCode: { type: String },
         upiId: { type: String },
     },
-    status: { type: String, enum: ["pending", "paid"], default: "pending" },
+    status: { type: String, enum: ["pending", "paid", "Approved"], default: "pending" },
     notes: { type: String },
     email: { type: String, required: true },
     pdfUrl: { type: String },
+    videoIds: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "Video" }],
     createdAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 exports.default = mongoose_1.default.model("Invoice", InvoiceSchema);

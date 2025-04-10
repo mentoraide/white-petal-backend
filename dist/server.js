@@ -19,6 +19,7 @@ const libraryRoutes_1 = __importDefault(require("./routes/libraryRoutes"));
 const WatchedVideo_1 = __importDefault(require("./routes/WatchedVideo"));
 const ProgramRoutes_1 = __importDefault(require("./routes/ProgramRoutes"));
 const GalleryRoute_1 = __importDefault(require("./routes/GalleryRoute"));
+const videoSettingRoutes_1 = __importDefault(require("./routes/videoSettingRoutes"));
 const chatRoute_1 = __importDefault(require("./routes/chatRoute"));
 const socket_1 = require("./lib/Utils/socket");
 const path_1 = __importDefault(require("path"));
@@ -49,6 +50,7 @@ socket_1.app.use("/api/v1/watchedVideo", WatchedVideo_1.default);
 socket_1.app.use("/api/v1/gallery", GalleryRoute_1.default);
 socket_1.app.use("/api/v1/program", ProgramRoutes_1.default);
 socket_1.app.use("/api/v1/chat", chatRoute_1.default);
+socket_1.app.use("/api/v1/VideoSetting", videoSettingRoutes_1.default);
 const PORT = process.env.PORT || 3000;
 socket_1.app.use(express_1.default.static(path_1.default.join(__dirname, "../build")));
 socket_1.app.use(function (req, res) {

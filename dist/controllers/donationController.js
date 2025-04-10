@@ -9,7 +9,7 @@ const Donation_1 = __importDefault(require("../models/Donation"));
 const user_1 = __importDefault(require("../models/user"));
 // Initialize Stripe (Ensure to add your actual secret key)
 const stripe = new stripe_1.default(process.env.STRIPE_SECRET_KEY, {
-    apiVersion: '2025-02-24.acacia',
+    apiVersion: '2025-01-27.acacia',
 });
 const createCheckoutSession = (req, res) => {
     var _a;

@@ -10,6 +10,7 @@ const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const video_1 = __importDefault(require("../models/video"));
 dotenv_1.default.config();
 // Nodemailer transporter configuration
 const transporter = nodemailer_1.default.createTransport({
@@ -131,29 +132,51 @@ const approveInvoice = (req, res) => {
     Invoice_1.default.findById(req.params.id)
         .populate("instructor", "name email")
         .then((invoice) => {
-        if (!invoice)
+        if (!invoice) {
             return res.status(404).json({ message: "Invoice not found" });
+        }
         if (!invoice.instructor || typeof invoice.instructor !== "object" || !("email" in invoice.instructor)) {
             return res.status(400).json({ message: "Instructor details missing in invoice" });
         }
-        const approvalDate = new Date();
-        const pdfData = Object.assign(Object.assign({}, invoice.toObject()), { approvalDate: approvalDate, status: "Approved" });
-        // Approve the invoice without storing approvalDate in DB
-        Invoice_1.default.findByIdAndUpdate(req.params.id, { status: "Approved" }, { new: true })
-            .then((updatedInvoice) => {
-            if (!updatedInvoice) {
-                return res.status(400).json({ message: "Invoice update failed" });
-            }
-            generateInvoicePDF(pdfData)
-                .then((invoicePath) => sendInvoiceEmail(invoice.instructor.email, invoicePath))
-                .then(() => res.json({ message: "Invoice approved and email sent" }))
+        // ✅ Extract video IDs from invoice.videoIds instead of invoice.services
+        const videoIds = invoice.videoIds || [];
+        // ✅ Update videos' isPriced to true
+        video_1.default.updateMany({ _id: { $in: videoIds } }, { $set: { isPriced: true } })
+            .then(() => {
+            const approvalDate = new Date();
+            const pdfData = Object.assign(Object.assign({}, invoice.toObject()), { approvalDate, status: "Approved" });
+            // ✅ Update invoice status
+            Invoice_1.default.findByIdAndUpdate(req.params.id, { status: "Approved", approvalDate }, { new: true })
+                .then((updatedInvoice) => {
+                if (!updatedInvoice) {
+                    return res.status(400).json({ message: "Invoice approval failed" });
+                }
+                // ✅ Generate PDF and send email
+                generateInvoicePDF(pdfData)
+                    .then((invoicePath) => sendInvoiceEmail(invoice.instructor.email, invoicePath))
+                    .then(() => res.json({
+                    message: "Invoice approved, videos updated, and email sent",
+                    invoice: updatedInvoice,
+                }))
+                    .catch((error) => {
+                    console.error("PDF/email error:", error);
+                    res.status(500).json({ message: error.message });
+                });
+            })
                 .catch((error) => {
-                res.status(500).json({ message: error.message });
+                console.error("Invoice update error:", error);
+                res.status(400).json({ message: error.message });
             });
         })
-            .catch((error) => res.status(400).json({ message: error.message }));
+            .catch((error) => {
+            console.error("Video update error:", error);
+            res.status(500).json({ message: error.message });
+        });
     })
-        .catch((error) => res.status(400).json({ message: error.message }));
+        .catch((error) => {
+        console.error("Invoice fetch error:", error);
+        res.status(400).json({ message: error.message });
+    });
 };
 exports.approveInvoice = approveInvoice;
 // Reject invoice and send email
