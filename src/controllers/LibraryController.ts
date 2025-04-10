@@ -157,20 +157,15 @@ export const getLibraryVideoById = (req: Request, res: Response): Promise<void> 
   return Promise.resolve();
 };
 
-// ✅ Get All Videos with Pagination
+// ✅ Get All Videos 
 export const getAllLibraryVideo = (req: Request, res: Response): Promise<void> => {
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 10;
-  const skip = (page - 1) * limit;
-
   LibraryVideo.find()
-    .skip(skip)
-    .limit(limit)
-    .then((videos) => res.json({ videos, total: videos.length, page, limit }))
+    .then((videos) => res.json({ videos, total: videos.length }))
     .catch((err) => res.status(500).json({ error: err.message }));
 
   return Promise.resolve();
 };
+
 
 // ✅ Delete Library Video
 export const deleteLibraryVideo = (req: AuthenticatedRequest, res: Response): Promise<void> => {

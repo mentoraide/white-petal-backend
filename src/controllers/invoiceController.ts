@@ -3,8 +3,6 @@ import InvoiceModel from "../models/Invoice";
 import { IUser } from "../models/user";
 import PDFDocument from "pdfkit";
 import nodemailer from "nodemailer";
-import fs from "fs";
-import path from "path";
 import dotenv from "dotenv";
 import VideoModel from "../models/video";
 
@@ -25,11 +23,16 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-const generateInvoicePDF = (invoice: any, filePath: string): Promise<void> => {
-    return new Promise<void>((resolve, reject) => {
+const generateInvoicePDF = (invoice: any): Promise<Buffer> => {
+    return new Promise<Buffer>((resolve, reject) => {
         const doc = new PDFDocument({ margin: 50 });
-        const stream = fs.createWriteStream(filePath);
-        doc.pipe(stream);
+        const buffers: Uint8Array[] = [];
+
+        doc.on("data", buffers.push.bind(buffers));
+        doc.on("end", () => {
+            const pdfBuffer = Buffer.concat(buffers);
+            resolve(pdfBuffer);
+        });
 
         doc.fontSize(20).text("INVOICE", { align: "center" }).moveDown(1);
         doc.fontSize(14).text(`Invoice Number: ${invoice.invoiceNumber}`);
@@ -49,8 +52,9 @@ const generateInvoicePDF = (invoice: any, filePath: string): Promise<void> => {
 
         doc.fontSize(14).text("Services Invoiced:", { underline: true });
         invoice.services.forEach((service: any, index: number) => {
-            doc.fontSize(12).text(`${index + 1}. ${service.title} | Duration: ${service.duration} | Rate: $${service.ratePerVideo} | Total: $${service.totalAmount}`);
-            doc.moveDown(0.5);
+            doc.fontSize(12).text(
+                `${index + 1}. ${service.title} | Duration: ${service.duration} | Rate: $${service.ratePerVideo} | Total: $${service.totalAmount}`
+            ).moveDown(0.5);
         });
 
         doc.fontSize(14).text("Total Amount:", { underline: true });
@@ -59,40 +63,30 @@ const generateInvoicePDF = (invoice: any, filePath: string): Promise<void> => {
         doc.text(`Discount: $${invoice.discount || 0}`).moveDown(0.5);
         doc.text(`Grand Total: $${invoice.grandTotal}`).moveDown(1);
 
-
-        // Payment Details Section (with proper alignment)
         doc.fontSize(14).text("Payment Details:", { underline: true });
-        doc.fontSize(12).text(`Payment Mode: ${invoice.paymentDetails.method}`).moveDown(0.5); // 0.5 line gap
-        doc.text(`Bank Name: ${invoice.paymentDetails.bankName}`).moveDown(0.5); // 0.5 line gap
-        doc.text(`Account Holder: ${invoice.paymentDetails.accountHolder}`).moveDown(0.5); // 0.5 line gap
-        doc.text(`Account Number: ${invoice.paymentDetails.accountNumber}`).moveDown(0.5); // 0.5 line gap
-        doc.text(`IFSC Code: ${invoice.paymentDetails.ifscCode}`).moveDown(0.5); // 0.5 line gap
+        doc.fontSize(12).text(`Payment Mode: ${invoice.paymentDetails.method}`).moveDown(0.5);
+        doc.text(`Bank Name: ${invoice.paymentDetails.bankName}`).moveDown(0.5);
+        doc.text(`Account Holder: ${invoice.paymentDetails.accountHolder}`).moveDown(0.5);
+        doc.text(`Account Number: ${invoice.paymentDetails.accountNumber}`).moveDown(0.5);
+        doc.text(`IFSC Code: ${invoice.paymentDetails.ifscCode}`).moveDown(0.5);
         if (invoice.paymentDetails.upiId) {
-            doc.text(`UPI ID: ${invoice.paymentDetails.upiId}`).moveDown(1); // 1 line gap
+            doc.text(`UPI ID: ${invoice.paymentDetails.upiId}`).moveDown(1);
         }
 
-
-        // Approval Section (with proper alignment)
         doc.fontSize(14).text("Approval Section:", { underline: true });
-        doc.fontSize(12).text("Admin Signature: ________________").moveDown(0.5); // 0.5 line gap
-        doc.text("Approval Status: Pending").moveDown(1); // 1 line gap
+        doc.fontSize(12).text("Admin Signature: ________________").moveDown(0.5);
+        doc.text("Approval Status: Pending").moveDown(1);
 
-
-        // Notes Section (with proper alignment)
         doc.fontSize(14).text("Notes:", { underline: true });
-        doc.fontSize(12).text("[Admin Remarks]").moveDown(1); // 1 line gap
-        
+        doc.fontSize(12).text("[Admin Remarks]").moveDown(1);
 
-        // Terms & Conditions Section (with proper alignment)
         doc.fontSize(14).text("Terms & Conditions:", { underline: true });
-        doc.fontSize(12).text("1. Payment will be processed within 10 days from the invoice date.").moveDown(0.5); // 0.5 line gap
-        doc.text("2. The instructor confirms all videos are original and copyright-free.").moveDown(0.5); // 0.5 line gap
-        doc.text("3. Any disputes must be raised within 7 days of payment.").moveDown(0.5); // 0.5 line gap
-        doc.text("4. Taxes, if applicable, are the responsibility of the instructor.").moveDown(1); // 1 line gap
+        doc.fontSize(12).text("1. Payment will be processed within 10 days from the invoice date.").moveDown(0.5);
+        doc.text("2. The instructor confirms all videos are original and copyright-free.").moveDown(0.5);
+        doc.text("3. Any disputes must be raised within 7 days of payment.").moveDown(0.5);
+        doc.text("4. Taxes, if applicable, are the responsibility of the instructor.").moveDown(1);
 
         doc.end();
-        stream.on("finish", resolve);
-        stream.on("error", reject);
     });
 };
 
@@ -117,7 +111,7 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
         paymentDetails,
         status,
         notes,
-        videoIds, // NEW FIELD
+        videoIds,
     } = req.body;
 
     if (
@@ -153,34 +147,19 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
             paymentDetails,
             status,
             notes,
-            videoIds, // 💾 Save video IDs in invoice
+            videoIds,
         }).save();
 
+        // 📄 Generate invoice PDF in memory
+        const pdfBuffer = await generateInvoicePDF(invoice);
 
-        // 📄 PDF generation and Email sending
-        const invoicesDir = path.join(__dirname, "../public/invoices");
-        if (!fs.existsSync(invoicesDir)) {
-            fs.mkdirSync(invoicesDir, { recursive: true });
-        }
-
-        const filePath = path.join(invoicesDir, `${invoice._id}.pdf`);
-        await generateInvoicePDF(invoice, filePath);
-
-        try {
-            await fs.promises.access(filePath, fs.constants.F_OK);
-            invoice.pdfUrl = `${process.env.BASE_URL}/invoices/${invoice._id}.pdf`;
-            await invoice.save();
-        } catch {
-            res.status(500).json({ message: "Failed to generate the PDF invoice" });
-            return;
-        }
-
+        // 📧 Send email with PDF attachment (buffer)
         const mailOptions = {
             from: process.env.SMTP_MAIL,
             to: invoice.email,
             subject: "Invoice Generated",
             text: "Please find your invoice attached.",
-            attachments: [{ filename: "invoice.pdf", path: filePath }],
+            attachments: [{ filename: "invoice.pdf", content: pdfBuffer }],
         };
 
         transporter.sendMail(mailOptions, (err) => {
@@ -237,4 +216,4 @@ export const deleteInvoice = (req: AuthRequest, res: Response): void => {
             res.status(200).json({ message: "Invoice deleted successfully" });
         })
         .catch((error) => res.status(400).json({ message: error.message }));
-};
+}
