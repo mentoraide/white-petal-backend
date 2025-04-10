@@ -146,15 +146,10 @@ const getLibraryVideoById = (req, res) => {
     return Promise.resolve();
 };
 exports.getLibraryVideoById = getLibraryVideoById;
-// ✅ Get All Videos with Pagination
+// ✅ Get All Videos 
 const getAllLibraryVideo = (req, res) => {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
     LibraryBook_1.default.find()
-        .skip(skip)
-        .limit(limit)
-        .then((videos) => res.json({ videos, total: videos.length, page, limit }))
+        .then((videos) => res.json({ videos, total: videos.length }))
         .catch((err) => res.status(500).json({ error: err.message }));
     return Promise.resolve();
 };
