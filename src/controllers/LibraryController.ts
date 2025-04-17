@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import LibraryVideo from '../models/LibraryBook';
 import cloudinary from 'cloudinary';
+import LibraryRecycleBinModel from "../models/LibraryVideoRecycleBinModel"
 
 interface AuthenticatedRequest extends Request {
   user?: { id: string; role: string };
@@ -168,15 +169,53 @@ export const getAllLibraryVideo = (req: Request, res: Response): Promise<void> =
 
 
 // ✅ Delete Library Video
-export const deleteLibraryVideo = (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  LibraryVideo.findByIdAndDelete(req.params.id)
-    .then((deletedVideo) =>
-      deletedVideo
-        ? res.json({ message: 'Library Video deleted successfully' })
-        : res.status(404).json({ message: 'Library Video not found' })
-    )
-    .catch((err) => res.status(500).json({ error: err.message }));
+// export const deleteLibraryVideo = (req: AuthenticatedRequest, res: Response): Promise<void> => {
+//   LibraryVideo.findByIdAndDelete(req.params.id)
+//     .then((deletedVideo) =>
+//       deletedVideo
+//         ? res.json({ message: 'Library Video deleted successfully' })
+//         : res.status(404).json({ message: 'Library Video not found' })
+//     )
+//     .catch((err) => res.status(500).json({ error: err.message }));
 
-  return Promise.resolve();
-};
+//   return Promise.resolve();
+// };
+
+export const deleteLibraryVideo = (req: Request, res: Response): void => {
+  LibraryVideo.findById(req.params.id)
+    .then((video) => {
+      if (!video) {
+        res.status(404).json({ message: "Library video not found" });
+        return;
+      }
+
+      const recycleEntry = new LibraryRecycleBinModel({
+        originalVideoId: video._id,
+        title: video.title,
+        author: video.author,
+        subject: video.subject,
+        keywords: video.keywords,
+        videoUrl: video.videoUrl,  // Ensure this field is populated
+        coverImage: video.coverImage,
+        description: video.description,
+        uploadedBy: video.uploadedBy,
+        deletedAt: new Date(),
+      });
+
+      recycleEntry
+        .save()
+        .then(() => {
+          return LibraryVideo.findByIdAndDelete(video._id);
+        })
+        .then(() => {
+          res.status(200).json({ message: "Library video moved to Recycle Bin successfully" });
+        })
+        .catch((error) => {
+          res.status(500).json({ message: "Error while deleting library video", error: error.message });
+        });
+    })
+    .catch((error) => {
+      res.status(500).json({ message: error.message });
+    });
+}; 
 

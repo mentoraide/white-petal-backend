@@ -7,6 +7,7 @@ export interface Donation extends Document {
   donationType: 'one-time' | 'monthly';
   message?: string;
   status: 'pending' | 'completed' | 'failed';
+  donerName:string,
   paymentId: string; 
   updatedAt: Date;
 }
@@ -22,6 +23,10 @@ const DonationSchema: Schema = new Schema(
       type: Number,
       required: true,
     },
+    donerName:{
+     type:String,
+    },
+
     isAnonymous: {
       type: Boolean,
       default: false,

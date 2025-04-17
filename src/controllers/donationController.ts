@@ -32,7 +32,7 @@ export const createCheckoutSession = (req: AuthRequest, res: Response): Promise<
     return Promise.resolve();
   }
 
-  const { donationAmount, isAnonymous, donationType, message } = req.body;
+  const { donationAmount, isAnonymous,donerName, donationType, message } = req.body;
 
   if (!donationAmount || donationAmount <= 0) {
     res.status(400).json({ message: 'Invalid donation amount!' });
@@ -45,6 +45,7 @@ export const createCheckoutSession = (req: AuthRequest, res: Response): Promise<
     status: 'pending',
     isAnonymous: isAnonymous || false,
     donationType: donationType || 'one-time',
+    donerName:donerName,
     message: message || '',
     paymentId: '',
   });
