@@ -621,6 +621,7 @@ const updateUserProfile = (req: AuthRequest, res: Response): void => {
     return;
   }
 
+
   const { name, email } = req.body;
   const userId = req.params.userId;
   if (req.user.role === "admin") {

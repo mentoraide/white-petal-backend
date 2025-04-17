@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import VideoModel from "../models/video";
 import { IUser } from "../models/user";
 import cloudinary from "../lib/Utils/Cloundinary";
+import RecycleBinModel from "../models/recycleBin";
 
 // Define AuthRequest interface
 interface AuthRequest extends Request {
@@ -172,16 +173,52 @@ export const updateVideo = (req: AuthRequest, res: Response): void => {
 };
 
 // Delete Video
+// export const deleteVideo = (req: Request, res: Response): void => {
+//   VideoModel.findByIdAndDelete(req.params.id)
+//     .then((video) => {
+//       if (!video) {
+//         res.status(404).json({ message: "Video not found" });
+//         return;
+//       }
+//       res.json({ message: "Video deleted successfully" });
+//     })
+//     .catch((error) => res.status(400).json({ message: error.message }));
+// };
+
+// Updated Delete Video (Soft Delete)
 export const deleteVideo = (req: Request, res: Response): void => {
-  VideoModel.findByIdAndDelete(req.params.id)
+  VideoModel.findById(req.params.id)
     .then((video) => {
       if (!video) {
         res.status(404).json({ message: "Video not found" });
         return;
       }
-      res.json({ message: "Video deleted successfully" });
+
+      const recycleEntry = new RecycleBinModel({
+        originalVideoId: video._id,
+        courseName: video.courseName,
+        courseContent: video.courseContent,
+        videoUrl: video.videoUrl,
+        thumbnailUrl: video.thumbnailUrl,
+        description: video.description, 
+        status: video.status,
+        uploadedBy: video.uploadedBy,
+        deletedAt: new Date(),
+      });
+
+      recycleEntry.save().then(() => {
+        return VideoModel.findByIdAndDelete(video._id);
+      })
+      .then(() => {
+        res.status(200).json({ message: "Video moved to Recycle Bin successfully" });
+      })
+      .catch((error) => {
+        res.status(500).json({ message: "Error while deleting video", error: error.message });
+      });
     })
-    .catch((error) => res.status(400).json({ message: error.message }));
+    .catch((error) => {
+      res.status(500).json({ message: error.message });
+    });
 };
 
 // Get Instructor Profile
