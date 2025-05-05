@@ -150,10 +150,8 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
             videoIds,
         }).save();
 
-        // 📄 Generate invoice PDF in memory
         const pdfBuffer = await generateInvoicePDF(invoice);
 
-        // 📧 Send email with PDF attachment (buffer)
         const mailOptions = {
             from: process.env.SMTP_MAIL,
             to: invoice.email,
@@ -174,7 +172,6 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
-
 
 export const getInvoiceById = (req: AuthRequest, res: Response): void => {
     InvoiceModel.findById(req.params.invoiceId)
@@ -216,4 +213,28 @@ export const deleteInvoice = (req: AuthRequest, res: Response): void => {
             res.status(200).json({ message: "Invoice deleted successfully" });
         })
         .catch((error) => res.status(400).json({ message: error.message }));
-}
+};
+
+// ✅ New function to generate & serve PDF for download
+export const getInvoicePDF = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const invoice = await InvoiceModel.findById(req.params.invoiceId);
+        if (!invoice) {
+            res.status(404).json({ message: "Invoice not found" });
+            return;
+        }
+
+        const pdfBuffer = await generateInvoicePDF(invoice);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename=invoice-${invoice.invoiceNumber}.pdf`,
+            'Content-Length': pdfBuffer.length,
+        });
+
+        res.send(pdfBuffer);
+    } catch (error) {
+        console.error("Error generating invoice PDF:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+};

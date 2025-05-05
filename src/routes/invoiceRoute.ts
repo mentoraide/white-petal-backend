@@ -3,6 +3,7 @@ import {
   createInvoice,
   deleteInvoice,
   getInvoiceById,
+  getInvoicePDF,
   getInvoices,
   updateInvoice,
 } from "../controllers/invoiceController";
@@ -41,4 +42,7 @@ Route.delete(
   deleteInvoice
 );
 
+Route.get("/invoice/:invoiceId/pdf",  authenticate,
+  authorizeRoles("instructor"), getInvoicePDF);
 export default Route;
+

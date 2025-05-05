@@ -2,6 +2,7 @@ import { Response } from "express";
 import { AuthRequest } from "../lib/Utils/Middleware";
 import cloudinary from "../lib/Utils/Cloundinary";
 import Gallery from "../models/Gallery";
+import GalleryRecycleBin from "../models/GalleryRecyclebin";
 import fs from "fs";
 
 /**
@@ -95,6 +96,7 @@ export const rejectImage = (req: AuthRequest, res: Response): void => {
     return;
   }
 
+
   Gallery.findByIdAndUpdate(req.params.id, { approved: false }, { new: true })
     .then((image) => {
       if (!image) return res.status(404).json({ message: "Image not found." });
@@ -145,15 +147,29 @@ export const updateImage = (req: AuthRequest, res: Response): void => {
 /**
  * Delete Image - Requires authentication
  */
-export const deleteImage = (req: AuthRequest, res: Response) => {
-  Gallery.findByIdAndDelete(req.params.id)
+export const deleteImage = (req: AuthRequest, res: Response): void => {
+  Gallery.findById(req.params.id)
     .then((image) => {
-      if (!image) return res.status(404).json({ message: "Image not found." });
-      res.json({ message: "Image deleted successfully." });
+      if (!image) {
+        return res.status(404).json({ message: "Image not found." });
+      }
+
+      return GalleryRecycleBin.create({
+        originalImageId: image._id,
+        imageUrl: image.imageUrl,
+        title: image.title,
+        schoolName: image.schoolName,
+        uploadedBy: image.uploadedBy,
+        approved: image.approved,
+      }).then(() =>
+        image.deleteOne().then(() =>
+          res.json({ message: "Image moved to Recycle Bin." })
+        )
+      );
     })
-    .catch((err) =>
-      res.status(500).json({ message: "Delete failed.", error: err })
-    );
+    .catch((err) => {
+      res.status(500).json({ message: "Delete failed.", error: err });
+    });
 };
 
 export const getPendingImages = (req: AuthRequest, res: Response): void => {

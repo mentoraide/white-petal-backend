@@ -21,7 +21,7 @@ Route.post(
   "/upload",
   authenticate,
   authorizeRoles(ADMIN, SCHOOL),
-  upload.single("file"),
+  upload.single("image"), // 🔁 changed from 'file' to 'image'
   uploadImage
 );
 Route.put("/approve/:id", authenticate, authorizeRoles(ADMIN), approveImage);
