@@ -519,12 +519,20 @@ const createUserByAdmin = (req: AuthRequest, res: Response): void => {
     return;
   }
 
-  const { name, email, role } = req.body;
+  const { name, email, role, password } = req.body;
 
   if (role !== "instructor" && role !== "school") {
     res.status(ResponseCode.BAD_REQUEST).json({
       status: false,
       message: "Invalid role. Only 'instructor' or 'school' allowed",
+    });
+    return;
+  }
+
+  if (!password || password.length < 6) {
+    res.status(ResponseCode.BAD_REQUEST).json({
+      status: false,
+      message: "Password is required and must be at least 6 characters",
     });
     return;
   }
@@ -538,13 +546,13 @@ const createUserByAdmin = (req: AuthRequest, res: Response): void => {
         return Promise.reject("Email already exists");
       }
 
-      const hashedPassword = bcrypt.hashSync(req.body.password || email, 10);
+      const hashedPassword = bcrypt.hashSync(password, 10);
       const user = new UserModel({
         name,
         email,
         password: hashedPassword,
         role,
-        approved: true, // ✅ Auto-approve when created by admin
+        approved: true,
       });
 
       return user.save();
@@ -555,7 +563,6 @@ const createUserByAdmin = (req: AuthRequest, res: Response): void => {
         message: "User created successfully",
         user: {
           id: user._id,
-          _id: user._id,
           name: user.name,
           email: user.email,
           role: user.role,
@@ -571,6 +578,7 @@ const createUserByAdmin = (req: AuthRequest, res: Response): void => {
       }
     });
 };
+
 
 //Logout Controller
 const logout = (req: Request, res: Response): void => {
@@ -613,76 +621,59 @@ const getUserProfile = (req: AuthRequest, res: Response<Res<IUser>>): void => {
 };
 
 // Update user profile
-const updateUserProfile = (req: AuthRequest, res: Response): void => {
+export const updateUserProfile = (req: AuthRequest, res: Response): void => {
   if (!req.user) {
-    res
-      .status(ResponseCode.UNAUTHORIZED)
-      .json({ status: false, message: "User is not authenticated" });
+    res.status(ResponseCode.UNAUTHORIZED).json({
+      status: false,
+      message: "User is not authenticated",
+    });
     return;
   }
 
-
-  const { name, email } = req.body;
+  const { name, email, address, phone } = req.body;
   const userId = req.params.userId;
-  if (req.user.role === "admin") {
-    let updateData: any = { name, email };
 
-    if (req.file) {
-      cloudinary.uploader
-        .upload(req.file.path, { folder: "profiles" })
-        .then((cloudinaryRes) => {
-          updateData.profileImage = cloudinaryRes.secure_url;
-          UserModel.findByIdAndUpdate(userId, updateData, { new: true })
-            .select("-password -token -__v")
-            .then((updatedUser) => {
-              if (updatedUser) {
-                res.status(ResponseCode.SUCCESS).json({
-                  status: true,
-                  data: updatedUser,
-                  message: "Profile updated successfully",
-                });
-              } else {
-                res
-                  .status(ResponseCode.NOT_FOUND_ERROR)
-                  .json({ status: false, message: "User not found" });
-              }
-            })
-            .catch(() => {
-              res.status(ResponseCode.SERVER_ERROR).json({
-                status: false,
-                message: "Error updating user profile",
-              });
-            });
-        })
-        .catch(() => {
-          res
-            .status(ResponseCode.SERVER_ERROR)
-            .json({ status: false, message: "Error uploading image" });
+  const updateData: any = { name, email, address, phone };
+
+  // Admin can update any user
+  if (req.user.role === "admin") {
+    UserModel.findByIdAndUpdate(userId, updateData, { new: true })
+      .select("-password -token -__v")
+      .then((updatedUser) => {
+        if (updatedUser) {
+          // Custom order of fields in response
+          const formattedUser = {
+            _id: updatedUser._id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            address: updatedUser.address,
+            phone: updatedUser.phone,
+            role: updatedUser.role,
+            approved: updatedUser.approved,
+            createdAt: updatedUser.createdOn,
+            updatedAt: updatedUser.updatedOn
+          };
+
+          res.status(ResponseCode.SUCCESS).json({
+            status: true,
+            data: formattedUser,
+            message: "Profile updated successfully",
+          });
+        } else {
+          res.status(ResponseCode.NOT_FOUND_ERROR).json({
+            status: false,
+            message: "User not found",
+          });
+        }
+      })
+      .catch(() => {
+        res.status(ResponseCode.SERVER_ERROR).json({
+          status: false,
+          message: "Error updating user profile",
         });
-    } else {
-      UserModel.findByIdAndUpdate(userId, updateData, { new: true })
-        .select("-password -token -__v")
-        .then((updatedUser) => {
-          if (updatedUser) {
-            res.status(ResponseCode.SUCCESS).json({
-              status: true,
-              data: updatedUser,
-              message: "Profile updated successfully",
-            });
-          } else {
-            res
-              .status(ResponseCode.NOT_FOUND_ERROR)
-              .json({ status: false, message: "User not found" });
-          }
-        })
-        .catch(() => {
-          res
-            .status(ResponseCode.SERVER_ERROR)
-            .json({ status: false, message: "Server error" });
-        });
-    }
+      });
   } else {
-    // Non-admin users (Instructors, Schools) can only update their own profile
+    // Non-admin can only update their own profile
     if (userId !== req.user.id.toString()) {
       res.status(ResponseCode.FORBIDDEN).json({
         status: false,
@@ -691,65 +682,44 @@ const updateUserProfile = (req: AuthRequest, res: Response): void => {
       return;
     }
 
-    let updateData: any = { name, email };
+    UserModel.findByIdAndUpdate(userId, updateData, { new: true })
+      .select("-password -token -__v")
+      .then((updatedUser) => {
+        if (updatedUser) {
+          // Custom order of fields in response
+          const formattedUser = {
+            _id: updatedUser._id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            address: updatedUser.address,
+            phone: updatedUser.phone,
+            role: updatedUser.role,
+            approved: updatedUser.approved,
+            createdAt: updatedUser.createdOn,
+            updatedAt: updatedUser.updatedOn
+          };
 
-    if (req.file) {
-      cloudinary.uploader
-        .upload(req.file.path, { folder: "profiles" })
-        .then((cloudinaryRes) => {
-          updateData.profileImage = cloudinaryRes.secure_url;
-          UserModel.findByIdAndUpdate(userId, updateData, { new: true })
-            .select("-password -token -__v")
-            .then((updatedUser) => {
-              if (updatedUser) {
-                res.status(ResponseCode.SUCCESS).json({
-                  status: true,
-                  data: updatedUser,
-                  message: "Profile updated successfully",
-                });
-              } else {
-                res
-                  .status(ResponseCode.NOT_FOUND_ERROR)
-                  .json({ status: false, message: "User not found" });
-              }
-            })
-            .catch(() => {
-              res.status(ResponseCode.SERVER_ERROR).json({
-                status: false,
-                message: "Error updating user profile",
-              });
-            });
-        })
-        .catch(() => {
-          res
-            .status(ResponseCode.SERVER_ERROR)
-            .json({ status: false, message: "Error uploading image" });
+          res.status(ResponseCode.SUCCESS).json({
+            status: true,
+            data: formattedUser,
+            message: "Profile updated successfully",
+          });
+        } else {
+          res.status(ResponseCode.NOT_FOUND_ERROR).json({
+            status: false,
+            message: "User not found",
+          });
+        }
+      })
+      .catch(() => {
+        res.status(ResponseCode.SERVER_ERROR).json({
+          status: false,
+          message: "Server error",
         });
-    } else {
-      // Update profile without image
-      UserModel.findByIdAndUpdate(userId, updateData, { new: true })
-        .select("-password -token -__v")
-        .then((updatedUser) => {
-          if (updatedUser) {
-            res.status(ResponseCode.SUCCESS).json({
-              status: true,
-              data: updatedUser,
-              message: "Profile updated successfully",
-            });
-          } else {
-            res
-              .status(ResponseCode.NOT_FOUND_ERROR)
-              .json({ status: false, message: "User not found" });
-          }
-        })
-        .catch(() => {
-          res
-            .status(ResponseCode.SERVER_ERROR)
-            .json({ status: false, message: "Server error" });
-        });
-    }
+      });
   }
 };
+
 
 export default {
   register,

@@ -102,16 +102,16 @@ export const getAllVideos = (req: Request, res: Response): void => {
 export const updateVideo = (req: AuthRequest, res: Response): void => {
   if (!req.user || !req.user.id) {
     res.status(401).json({ message: "Unauthorized: No user found" });
-    return;
   }
-  const files = req.files as
-    | { [key: string]: Express.Multer.File[] }
-    | undefined;
+
+  const files = req.files as { [key: string]: Express.Multer.File[] } | undefined;
+  
   if (!files) {
     console.error("No files received");
   }
-  //   console.log(req.body);
+
   const { courseName, courseContent, description, rank } = req.body;
+  
   const updateFields: Partial<{
     courseName: string;
     courseContent: string;
@@ -126,7 +126,7 @@ export const updateVideo = (req: AuthRequest, res: Response): void => {
   if (description) updateFields.description = description;
   if (rank) updateFields.rank = rank;
 
-  // Upload video & thumbnail if provided
+  // If no files are uploaded, proceed with updating text fields only
   const videoPromise = files?.video
     ? cloudinary.uploader.upload(files.video[0].path, {
         resource_type: "video",
@@ -143,10 +143,17 @@ export const updateVideo = (req: AuthRequest, res: Response): void => {
 
   Promise.all([videoPromise, thumbnailPromise])
     .then(([videoUpload, thumbnailUpload]) => {
-      if (videoUpload) updateFields.videoUrl = videoUpload.secure_url;
-      if (thumbnailUpload)
+      // Only update URLs if uploads are successful
+      if (videoUpload) {
+        // Ensure videoUrl is assigned properly from Cloudinary's response
+        updateFields.videoUrl = videoUpload.secure_url;
+      }
+      if (thumbnailUpload) {
+        // Ensure thumbnailUrl is assigned properly from Cloudinary's response
         updateFields.thumbnailUrl = thumbnailUpload.secure_url;
+      }
 
+      // Proceed with video update
       return VideoModel.findByIdAndUpdate(
         req.params.id,
         { $set: updateFields },
@@ -155,20 +162,21 @@ export const updateVideo = (req: AuthRequest, res: Response): void => {
     })
     .then((updatedVideo) => {
       if (!updatedVideo) {
-        res
-          .status(404)
-          .json({ message: "Video not found or unauthorized update attempt" });
-        return;
+        return res.status(404).json({
+          message: "Video not found or unauthorized update attempt",
+        });
       }
-      res
-        .status(200)
-        .json({ message: "Video updated successfully", updatedVideo });
+      res.status(200).json({
+        message: "Video updated successfully",
+        updatedVideo,
+      });
     })
     .catch((error) => {
       console.error("Error updating video:", error);
-      res
-        .status(500)
-        .json({ message: "Internal server error", error: error.message });
+      res.status(500).json({
+        message: "Internal server error",
+        error: error.message,
+      });
     });
 };
 

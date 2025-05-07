@@ -5,6 +5,9 @@ import PDFDocument from "pdfkit";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import VideoModel from "../models/video";
+import { Readable } from "stream";
+import cloudinary from "../lib/Utils/Cloundinary";
+
 
 dotenv.config();
 
@@ -97,7 +100,6 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
     }
 
     const {
-        invoiceNumber,
         dueDate,
         instructorDetails,
         companyDetails,
@@ -152,21 +154,49 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
 
         const pdfBuffer = await generateInvoicePDF(invoice);
 
-        const mailOptions = {
-            from: process.env.SMTP_MAIL,
-            to: invoice.email,
-            subject: "Invoice Generated",
-            text: "Please find your invoice attached.",
-            attachments: [{ filename: "invoice.pdf", content: pdfBuffer }],
-        };
+        // Upload to Cloudinary
+        const uploadStream = cloudinary.uploader.upload_stream(
+            {
+                folder: "invoices",
+                resource_type: "raw",
+                public_id: `invoice-${invoice.invoiceNumber}`,
+            },
+            async (error, result) => {
+                if (error || !result) {
+                    console.error("Cloudinary upload failed:", error);
+                    res.status(500).json({ message: "PDF upload failed" });
+                    return;
+                }
 
-        transporter.sendMail(mailOptions, (err) => {
-            if (err) {
-                res.status(500).json({ message: "Invoice created but email not sent", error: err.message });
-            } else {
-                res.status(201).json({ message: "Invoice created and email sent successfully", invoice });
+                invoice.pdfUrl = result.secure_url;
+                await invoice.save();
+
+
+                const mailOptions = {
+                    from: process.env.SMTP_MAIL,
+                    to: invoice.email,
+                    subject: "Invoice Generated",
+                    html: `<p>Your invoice is ready. <a href="${result.secure_url}" target="_blank">View Invoice</a></p>`,
+                };
+
+                transporter.sendMail(mailOptions, (err) => {
+                    if (err) {
+                        res.status(500).json({ message: "Invoice created but email not sent", error: err.message });
+                    } else {
+                        res.status(201).json({
+                            message: "Invoice created, uploaded to Cloudinary, and email sent",
+                            invoice,
+                        });
+                    }
+                });
             }
-        });
+        );
+
+        const readable = new Readable();
+        readable.push(pdfBuffer);
+        readable.push(null);
+        readable.pipe(uploadStream);
+
     } catch (error) {
         console.error("Error creating invoice:", error);
         res.status(500).json({ message: "Internal Server Error" });
