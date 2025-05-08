@@ -154,12 +154,12 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
 
         const pdfBuffer = await generateInvoicePDF(invoice);
 
-        // Upload to Cloudinary
+        // Upload to Cloudinary with .pdf extension for download support
         const uploadStream = cloudinary.uploader.upload_stream(
             {
                 folder: "invoices",
                 resource_type: "raw",
-                public_id: `invoice-${invoice.invoiceNumber}`,
+                public_id: `invoice-${invoice.invoiceNumber}.pdf`, // Add .pdf for download
             },
             async (error, result) => {
                 if (error || !result) {
@@ -171,12 +171,11 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
                 invoice.pdfUrl = result.secure_url;
                 await invoice.save();
 
-
                 const mailOptions = {
                     from: process.env.SMTP_MAIL,
                     to: invoice.email,
                     subject: "Invoice Generated",
-                    html: `<p>Your invoice is ready. <a href="${result.secure_url}" target="_blank">View Invoice</a></p>`,
+                    html: `<p>Your invoice is ready. <a href="${result.secure_url}" target="_blank" download>Download Invoice</a></p>`,
                 };
 
                 transporter.sendMail(mailOptions, (err) => {
@@ -202,6 +201,7 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
+
 
 export const getInvoiceById = (req: AuthRequest, res: Response): void => {
     InvoiceModel.findById(req.params.invoiceId)
