@@ -29,7 +29,6 @@ export const restoreLibraryVideo = async (req: Request, res: Response): Promise<
       uploadedBy: item.uploadedBy,
       approved: item.approved,
       deletedAt: new Date(),
-
     });
 
     await restoredVideo.save();
@@ -47,7 +46,7 @@ export const permanentDeleteLibraryVideo = async (req: Request<{ id: string }>, 
   try {
     const deleted = await LibraryRecycleBinModel.findByIdAndDelete(req.params.id);
     if (!deleted) {
-      res.status(404).json({ message: "Recycle item not found" });
+      res.status(404).json({ message: "Recycle item not found" }); 
       return;
     }
 

@@ -185,40 +185,36 @@ export const updateVideo = (req: AuthRequest, res: Response): void => {
 //     .catch((error) => res.status(400).json({ message: error.message }));
 // };
 
-// Updated Delete Video (Soft Delete)
-export const deleteVideo = (req: Request, res: Response): void => {
-  VideoModel.findById(req.params.id)
-    .then((video) => {
-      if (!video) {
-        res.status(404).json({ message: "Video not found" });
-        return;
-      }
+// ✅ DELETE VIDEO and move to Recycle Bin
+export const deleteVideo = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const video = await VideoModel.findById(req.params.id);
+    if (!video) {
+      res.status(404).json({ message: "Video not found" });
+      return;
+    }
 
-      const recycleEntry = new RecycleBinModel({
-        originalVideoId: video._id,
-        courseName: video.courseName,
-        courseContent: video.courseContent,
-        videoUrl: video.videoUrl,
-        thumbnailUrl: video.thumbnailUrl,
-        description: video.description, 
-        status: video.status,
-        uploadedBy: video.uploadedBy,
-        deletedAt: new Date(),
-      });
-
-      recycleEntry.save().then(() => {
-        return VideoModel.findByIdAndDelete(video._id);
-      })
-      .then(() => {
-        res.status(200).json({ message: "Video moved to Recycle Bin successfully" });
-      })
-      .catch((error) => {
-        res.status(500).json({ message: "Error while deleting video", error: error.message });
-      });
-    })
-    .catch((error) => {
-      res.status(500).json({ message: error.message });
+    // Create recycle bin entry
+    const recycleEntry = new RecycleBinModel({
+      originalVideoId: video._id,               // <-- original video ID saved
+      courseName: video.courseName,
+      courseContent: video.courseContent,
+      videoUrl: video.videoUrl,
+      thumbnailUrl: video.thumbnailUrl,
+      description: video.description,
+      status: video.status,
+      uploadedBy: video.uploadedBy,
+      deletedAt: new Date(),
     });
+
+    await recycleEntry.save();                  // Save recycle entry
+    await VideoModel.findByIdAndDelete(video._id);  // Delete original video
+
+    res.status(200).json({ message: "Video moved to Recycle Bin successfully" });
+  } catch (error: any) {
+    console.error("Error in deleteVideo:", error.message);
+    res.status(500).json({ message: "Error while deleting video", error: error.message });
+  }
 };
 
 // Get Instructor Profile
