@@ -209,6 +209,7 @@ const forgotPassword = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Generate reset token
     const resetToken = crypto.randomBytes(32).toString("hex");
     const hashedToken = crypto
       .createHash("sha256")
@@ -216,12 +217,10 @@ const forgotPassword = async (req: Request, res: Response): Promise<void> => {
       .digest("hex");
 
     user.resetPasswordToken = hashedToken;
-    user.resetPasswordExpires = Date.now() + 3600000; // Store as number for compatibility
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
     await user.save({ validateBeforeSave: false });
 
-    // console.log("Reset Token:", resetToken); // Debugging
-    // console.log("Hashed Token:", hashedToken);
-
+    // Create email transporter
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),
@@ -232,25 +231,36 @@ const forgotPassword = async (req: Request, res: Response): Promise<void> => {
       },
     });
 
+    const resetLink = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+
     const mailOptions = {
-      from: process.env.SMTP_MAIL,
+      from: `"Your App Name" <${process.env.SMTP_MAIL}>`,
       to: user.email,
-      subject: "Password Reset Request",
-      text: `You requested a password reset. Click the link to reset: ${process.env.CLIENT_URL}/reset-password/${resetToken}`,
+      subject: "Reset Your Password",
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+          <h2>Password Reset Request</h2>
+          <p>Hello ${user.name || "User"},</p>
+          <p>You requested to reset your password. Click the button below to proceed:</p>
+          <a href="${resetLink}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px;">Reset Password</a>
+          <p>If the button doesn't work, copy and paste this link into your browser:</p>
+          <p><a href="${resetLink}">${resetLink}</a></p>
+          <p>This link will expire in 1 hour.</p>
+        </div>
+      `,
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    // console.log("Email sent: ", info.response);
+    await transporter.sendMail(mailOptions);
 
     res.status(ResponseCode.SUCCESS).json({
       status: true,
       message: "Password reset link sent to your email.",
     });
   } catch (error) {
-    console.error("Error in forgotPassword:", error); // Debugging
+    console.error("Error in forgotPassword:", error);
     res.status(ResponseCode.SERVER_ERROR).json({
       status: false,
-      message: "Server error",
+      message: "Something went wrong while sending reset email",
     });
   }
 };

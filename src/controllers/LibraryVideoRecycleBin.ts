@@ -62,7 +62,7 @@ export const permanentDeleteLibraryVideo = async (
       req.params.id
     );
     if (!deleted) {
-      res.status(404).json({ message: "Recycle item not found" });
+      res.status(404).json({ message: "Recycle item not found" }); 
       return;
     }
 
