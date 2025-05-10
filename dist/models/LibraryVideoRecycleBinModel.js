@@ -34,41 +34,34 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const DonationSchema = new mongoose_1.Schema({
-    userId: {
-        type: mongoose_1.default.Schema.Types.ObjectId,
-        ref: 'User',
+const LibraryRecycleBinSchema = new mongoose_1.Schema({
+    originalVideoId: {
+        type: mongoose_1.Schema.Types.ObjectId,
         required: true,
+        ref: "LibraryVideo"
     },
-    amount: {
-        type: Number,
-        required: true,
-    },
-    donerName: {
+    title: { type: String },
+    author: { type: String },
+    subject: { type: String },
+    keywords: [{ type: String }],
+    coverImage: {
         type: String,
-        required: true,
     },
-    isAnonymous: {
-        type: Boolean,
-        default: false,
-    },
-    donationType: {
+    description: {
         type: String,
-        enum: ['one-time', 'monthly'],
-        required: true,
     },
-    message: {
-        type: String,
-        default: '',
+    uploadedBy: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "User"
     },
-    status: {
-        type: String,
-        enum: ['pending', 'completed', 'failed'],
-        default: 'pending',
+    videoUrl: {
+        type: String
     },
-    paymentId: {
-        type: String,
-        default: ''
+    deletedAt: {
+        type: Date,
+        default: Date.now,
+        index: { expires: "30d" }
     },
-}, { timestamps: true });
-exports.default = mongoose_1.default.model('Donation', DonationSchema);
+});
+const RecycleBinModel = mongoose_1.default.model("LibraryVideoRecycleBin", LibraryRecycleBinSchema);
+exports.default = RecycleBinModel;

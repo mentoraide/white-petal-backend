@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getPendingImages = exports.deleteImage = exports.updateImage = exports.getGallery = exports.rejectImage = exports.approveImage = exports.uploadImage = void 0;
 const Cloundinary_1 = __importDefault(require("../lib/Utils/Cloundinary"));
 const Gallery_1 = __importDefault(require("../models/Gallery"));
+const GalleryRecyclebin_1 = __importDefault(require("../models/GalleryRecyclebin"));
 const fs_1 = __importDefault(require("fs"));
 /**
  * Upload Image (Now accepts image URL)
@@ -128,13 +129,23 @@ exports.updateImage = updateImage;
  * Delete Image - Requires authentication
  */
 const deleteImage = (req, res) => {
-    Gallery_1.default.findByIdAndDelete(req.params.id)
+    Gallery_1.default.findById(req.params.id)
         .then((image) => {
-        if (!image)
+        if (!image) {
             return res.status(404).json({ message: "Image not found." });
-        res.json({ message: "Image deleted successfully." });
+        }
+        return GalleryRecyclebin_1.default.create({
+            originalImageId: image._id,
+            imageUrl: image.imageUrl,
+            title: image.title,
+            schoolName: image.schoolName,
+            uploadedBy: image.uploadedBy,
+            approved: image.approved,
+        }).then(() => image.deleteOne().then(() => res.json({ message: "Image moved to Recycle Bin." })));
     })
-        .catch((err) => res.status(500).json({ message: "Delete failed.", error: err }));
+        .catch((err) => {
+        res.status(500).json({ message: "Delete failed.", error: err });
+    });
 };
 exports.deleteImage = deleteImage;
 const getPendingImages = (req, res) => {

@@ -120,7 +120,6 @@ const register = (req: Request, res: Response): void => {
     });
 };
 
-
 // Login User
 const login = (
   req: Request,
@@ -150,8 +149,7 @@ const login = (
       }
 
       if (
-        (updatedUser.role === "instructor" ||
-          updatedUser.role === "school") &&
+        (updatedUser.role === "instructor" || updatedUser.role === "school") &&
         updatedUser.approved !== true
       ) {
         res.status(ResponseCode.FORBIDDEN).json({
@@ -197,9 +195,9 @@ const login = (
     });
 };
 
-
 // Forgot Password
 const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  console.log(req.body);
   const { email } = req.body;
   try {
     const user = await UserModel.findOne({ email });
@@ -212,8 +210,11 @@ const forgotPassword = async (req: Request, res: Response): Promise<void> => {
     }
 
     const resetToken = crypto.randomBytes(32).toString("hex");
-    const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
-    
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
     user.resetPasswordToken = hashedToken;
     user.resetPasswordExpires = Date.now() + 3600000; // Store as number for compatibility
     await user.save({ validateBeforeSave: false });
@@ -303,7 +304,6 @@ const resetPassword = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-
 const approveUser = (req: AuthRequest, res: Response): void => {
   if (req.user?.role === "school") {
     res
@@ -363,7 +363,6 @@ const approveUser = (req: AuthRequest, res: Response): void => {
       }
     });
 };
-
 
 //  Reject User (Admin Only)
 const rejectUserbyAdmin = (req: AuthRequest, res: Response): void => {
@@ -579,7 +578,6 @@ const createUserByAdmin = (req: AuthRequest, res: Response): void => {
     });
 };
 
-
 //Logout Controller
 const logout = (req: Request, res: Response): void => {
   res.clearCookie("token");
@@ -651,7 +649,7 @@ export const updateUserProfile = (req: AuthRequest, res: Response): void => {
             role: updatedUser.role,
             approved: updatedUser.approved,
             createdAt: updatedUser.createdOn,
-            updatedAt: updatedUser.updatedOn
+            updatedAt: updatedUser.updatedOn,
           };
 
           res.status(ResponseCode.SUCCESS).json({
@@ -696,7 +694,7 @@ export const updateUserProfile = (req: AuthRequest, res: Response): void => {
             role: updatedUser.role,
             approved: updatedUser.approved,
             createdAt: updatedUser.createdOn,
-            updatedAt: updatedUser.updatedOn
+            updatedAt: updatedUser.updatedOn,
           };
 
           res.status(ResponseCode.SUCCESS).json({
@@ -719,7 +717,6 @@ export const updateUserProfile = (req: AuthRequest, res: Response): void => {
       });
   }
 };
-
 
 export default {
   register,

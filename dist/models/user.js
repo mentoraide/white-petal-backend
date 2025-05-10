@@ -55,7 +55,8 @@ const UserSchema = new mongoose_1.Schema({
     bio: { type: String },
     profileImage: { type: String },
     approved: { type: Boolean, default: false },
-}, { timestamps: true });
+}, { timestamps: { createdAt: "createdOn", updatedAt: "updatedOn" }
+});
 // Pre-save hook: Auto-approve "admin" & "user"
 UserSchema.pre("save", function (next) {
     if (this.role === "admin") {

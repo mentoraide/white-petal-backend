@@ -12,11 +12,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteInvoice = exports.updateInvoice = exports.getInvoices = exports.getInvoiceById = exports.createInvoice = void 0;
+exports.getInvoicePDF = exports.deleteInvoice = exports.updateInvoice = exports.getInvoices = exports.getInvoiceById = exports.createInvoice = void 0;
 const Invoice_1 = __importDefault(require("../models/Invoice"));
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const stream_1 = require("stream");
+const Cloundinary_1 = __importDefault(require("../lib/Utils/Cloundinary"));
 dotenv_1.default.config();
 const transporter = nodemailer_1.default.createTransport({
     service: process.env.SMTP_SERVICE,
@@ -86,7 +88,7 @@ const createInvoice = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         res.status(401).json({ message: "Unauthorized: User not found in request" });
         return;
     }
-    const { invoiceNumber, dueDate, instructorDetails, companyDetails, services, subTotal, taxRate, taxAmount, discount, grandTotal, email, paymentDetails, status, notes, videoIds, } = req.body;
+    const { dueDate, instructorDetails, companyDetails, services, subTotal, taxRate, taxAmount, discount, grandTotal, email, paymentDetails, status, notes, videoIds, } = req.body;
     if (!dueDate || !instructorDetails || !companyDetails || !services ||
         subTotal === undefined || taxRate === undefined || taxAmount === undefined ||
         grandTotal === undefined || !email || !paymentDetails || !status || !videoIds) {
@@ -118,24 +120,42 @@ const createInvoice = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             notes,
             videoIds,
         }).save();
-        // 📄 Generate invoice PDF in memory
         const pdfBuffer = yield generateInvoicePDF(invoice);
-        // 📧 Send email with PDF attachment (buffer)
-        const mailOptions = {
-            from: process.env.SMTP_MAIL,
-            to: invoice.email,
-            subject: "Invoice Generated",
-            text: "Please find your invoice attached.",
-            attachments: [{ filename: "invoice.pdf", content: pdfBuffer }],
-        };
-        transporter.sendMail(mailOptions, (err) => {
-            if (err) {
-                res.status(500).json({ message: "Invoice created but email not sent", error: err.message });
+        // Upload to Cloudinary with .pdf extension for download support
+        const uploadStream = Cloundinary_1.default.uploader.upload_stream({
+            folder: "invoices",
+            resource_type: "raw",
+            public_id: `invoice-${invoice.invoiceNumber}.pdf`, // Add .pdf for download
+        }, (error, result) => __awaiter(void 0, void 0, void 0, function* () {
+            if (error || !result) {
+                console.error("Cloudinary upload failed:", error);
+                res.status(500).json({ message: "PDF upload failed" });
+                return;
             }
-            else {
-                res.status(201).json({ message: "Invoice created and email sent successfully", invoice });
-            }
-        });
+            invoice.pdfUrl = result.secure_url;
+            yield invoice.save();
+            const mailOptions = {
+                from: process.env.SMTP_MAIL,
+                to: invoice.email,
+                subject: "Invoice Generated",
+                html: `<p>Your invoice is ready. <a href="${result.secure_url}" target="_blank" download>Download Invoice</a></p>`,
+            };
+            transporter.sendMail(mailOptions, (err) => {
+                if (err) {
+                    res.status(500).json({ message: "Invoice created but email not sent", error: err.message });
+                }
+                else {
+                    res.status(201).json({
+                        message: "Invoice created, uploaded to Cloudinary, and email sent",
+                        invoice,
+                    });
+                }
+            });
+        }));
+        const readable = new stream_1.Readable();
+        readable.push(pdfBuffer);
+        readable.push(null);
+        readable.pipe(uploadStream);
     }
     catch (error) {
         console.error("Error creating invoice:", error);
@@ -185,3 +205,25 @@ const deleteInvoice = (req, res) => {
         .catch((error) => res.status(400).json({ message: error.message }));
 };
 exports.deleteInvoice = deleteInvoice;
+// ✅ New function to generate & serve PDF for download
+const getInvoicePDF = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const invoice = yield Invoice_1.default.findById(req.params.invoiceId);
+        if (!invoice) {
+            res.status(404).json({ message: "Invoice not found" });
+            return;
+        }
+        const pdfBuffer = yield generateInvoicePDF(invoice);
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename=invoice-${invoice.invoiceNumber}.pdf`,
+            'Content-Length': pdfBuffer.length,
+        });
+        res.send(pdfBuffer);
+    }
+    catch (error) {
+        console.error("Error generating invoice PDF:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+});
+exports.getInvoicePDF = getInvoicePDF;

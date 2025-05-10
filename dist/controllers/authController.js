@@ -12,11 +12,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.updateUserProfile = void 0;
 const user_1 = __importDefault(require("../models/user"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const ResponseCode_1 = require("../lib/Utils/ResponseCode");
-const Cloundinary_1 = __importDefault(require("../lib/Utils/Cloundinary"));
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const crypto_1 = __importDefault(require("crypto"));
 const createToken = (user) => {
@@ -446,11 +446,18 @@ const createUserByAdmin = (req, res) => {
             .json({ status: false, message: "Unauthorized" });
         return;
     }
-    const { name, email, role } = req.body;
+    const { name, email, role, password } = req.body;
     if (role !== "instructor" && role !== "school") {
         res.status(ResponseCode_1.ResponseCode.BAD_REQUEST).json({
             status: false,
             message: "Invalid role. Only 'instructor' or 'school' allowed",
+        });
+        return;
+    }
+    if (!password || password.length < 6) {
+        res.status(ResponseCode_1.ResponseCode.BAD_REQUEST).json({
+            status: false,
+            message: "Password is required and must be at least 6 characters",
         });
         return;
     }
@@ -462,13 +469,13 @@ const createUserByAdmin = (req, res) => {
                 .json({ status: false, message: "Email already exists" });
             return Promise.reject("Email already exists");
         }
-        const hashedPassword = bcryptjs_1.default.hashSync(req.body.password || email, 10);
+        const hashedPassword = bcryptjs_1.default.hashSync(password, 10);
         const user = new user_1.default({
             name,
             email,
             password: hashedPassword,
             role,
-            approved: true, // ✅ Auto-approve when created by admin
+            approved: true,
         });
         return user.save();
     })
@@ -478,7 +485,6 @@ const createUserByAdmin = (req, res) => {
             message: "User created successfully",
             user: {
                 id: user._id,
-                _id: user._id,
                 name: user.name,
                 email: user.email,
                 role: user.role,
@@ -531,75 +537,55 @@ const getUserProfile = (req, res) => {
 // Update user profile
 const updateUserProfile = (req, res) => {
     if (!req.user) {
-        res
-            .status(ResponseCode_1.ResponseCode.UNAUTHORIZED)
-            .json({ status: false, message: "User is not authenticated" });
+        res.status(ResponseCode_1.ResponseCode.UNAUTHORIZED).json({
+            status: false,
+            message: "User is not authenticated",
+        });
         return;
     }
-    const { name, email } = req.body;
+    const { name, email, address, phone } = req.body;
     const userId = req.params.userId;
+    const updateData = { name, email, address, phone };
+    // Admin can update any user
     if (req.user.role === "admin") {
-        let updateData = { name, email };
-        if (req.file) {
-            Cloundinary_1.default.uploader
-                .upload(req.file.path, { folder: "profiles" })
-                .then((cloudinaryRes) => {
-                updateData.profileImage = cloudinaryRes.secure_url;
-                user_1.default.findByIdAndUpdate(userId, updateData, { new: true })
-                    .select("-password -token -__v")
-                    .then((updatedUser) => {
-                    if (updatedUser) {
-                        res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
-                            status: true,
-                            data: updatedUser,
-                            message: "Profile updated successfully",
-                        });
-                    }
-                    else {
-                        res
-                            .status(ResponseCode_1.ResponseCode.NOT_FOUND_ERROR)
-                            .json({ status: false, message: "User not found" });
-                    }
-                })
-                    .catch(() => {
-                    res.status(ResponseCode_1.ResponseCode.SERVER_ERROR).json({
-                        status: false,
-                        message: "Error updating user profile",
-                    });
+        user_1.default.findByIdAndUpdate(userId, updateData, { new: true })
+            .select("-password -token -__v")
+            .then((updatedUser) => {
+            if (updatedUser) {
+                // Custom order of fields in response
+                const formattedUser = {
+                    _id: updatedUser._id,
+                    name: updatedUser.name,
+                    email: updatedUser.email,
+                    address: updatedUser.address,
+                    phone: updatedUser.phone,
+                    role: updatedUser.role,
+                    approved: updatedUser.approved,
+                    createdAt: updatedUser.createdOn,
+                    updatedAt: updatedUser.updatedOn
+                };
+                res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
+                    status: true,
+                    data: formattedUser,
+                    message: "Profile updated successfully",
                 });
-            })
-                .catch(() => {
-                res
-                    .status(ResponseCode_1.ResponseCode.SERVER_ERROR)
-                    .json({ status: false, message: "Error uploading image" });
+            }
+            else {
+                res.status(ResponseCode_1.ResponseCode.NOT_FOUND_ERROR).json({
+                    status: false,
+                    message: "User not found",
+                });
+            }
+        })
+            .catch(() => {
+            res.status(ResponseCode_1.ResponseCode.SERVER_ERROR).json({
+                status: false,
+                message: "Error updating user profile",
             });
-        }
-        else {
-            user_1.default.findByIdAndUpdate(userId, updateData, { new: true })
-                .select("-password -token -__v")
-                .then((updatedUser) => {
-                if (updatedUser) {
-                    res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
-                        status: true,
-                        data: updatedUser,
-                        message: "Profile updated successfully",
-                    });
-                }
-                else {
-                    res
-                        .status(ResponseCode_1.ResponseCode.NOT_FOUND_ERROR)
-                        .json({ status: false, message: "User not found" });
-                }
-            })
-                .catch(() => {
-                res
-                    .status(ResponseCode_1.ResponseCode.SERVER_ERROR)
-                    .json({ status: false, message: "Server error" });
-            });
-        }
+        });
     }
     else {
-        // Non-admin users (Instructors, Schools) can only update their own profile
+        // Non-admin can only update their own profile
         if (userId !== req.user.id.toString()) {
             res.status(ResponseCode_1.ResponseCode.FORBIDDEN).json({
                 status: false,
@@ -607,67 +593,44 @@ const updateUserProfile = (req, res) => {
             });
             return;
         }
-        let updateData = { name, email };
-        if (req.file) {
-            Cloundinary_1.default.uploader
-                .upload(req.file.path, { folder: "profiles" })
-                .then((cloudinaryRes) => {
-                updateData.profileImage = cloudinaryRes.secure_url;
-                user_1.default.findByIdAndUpdate(userId, updateData, { new: true })
-                    .select("-password -token -__v")
-                    .then((updatedUser) => {
-                    if (updatedUser) {
-                        res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
-                            status: true,
-                            data: updatedUser,
-                            message: "Profile updated successfully",
-                        });
-                    }
-                    else {
-                        res
-                            .status(ResponseCode_1.ResponseCode.NOT_FOUND_ERROR)
-                            .json({ status: false, message: "User not found" });
-                    }
-                })
-                    .catch(() => {
-                    res.status(ResponseCode_1.ResponseCode.SERVER_ERROR).json({
-                        status: false,
-                        message: "Error updating user profile",
-                    });
+        user_1.default.findByIdAndUpdate(userId, updateData, { new: true })
+            .select("-password -token -__v")
+            .then((updatedUser) => {
+            if (updatedUser) {
+                // Custom order of fields in response
+                const formattedUser = {
+                    _id: updatedUser._id,
+                    name: updatedUser.name,
+                    email: updatedUser.email,
+                    address: updatedUser.address,
+                    phone: updatedUser.phone,
+                    role: updatedUser.role,
+                    approved: updatedUser.approved,
+                    createdAt: updatedUser.createdOn,
+                    updatedAt: updatedUser.updatedOn
+                };
+                res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
+                    status: true,
+                    data: formattedUser,
+                    message: "Profile updated successfully",
                 });
-            })
-                .catch(() => {
-                res
-                    .status(ResponseCode_1.ResponseCode.SERVER_ERROR)
-                    .json({ status: false, message: "Error uploading image" });
+            }
+            else {
+                res.status(ResponseCode_1.ResponseCode.NOT_FOUND_ERROR).json({
+                    status: false,
+                    message: "User not found",
+                });
+            }
+        })
+            .catch(() => {
+            res.status(ResponseCode_1.ResponseCode.SERVER_ERROR).json({
+                status: false,
+                message: "Server error",
             });
-        }
-        else {
-            // Update profile without image
-            user_1.default.findByIdAndUpdate(userId, updateData, { new: true })
-                .select("-password -token -__v")
-                .then((updatedUser) => {
-                if (updatedUser) {
-                    res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
-                        status: true,
-                        data: updatedUser,
-                        message: "Profile updated successfully",
-                    });
-                }
-                else {
-                    res
-                        .status(ResponseCode_1.ResponseCode.NOT_FOUND_ERROR)
-                        .json({ status: false, message: "User not found" });
-                }
-            })
-                .catch(() => {
-                res
-                    .status(ResponseCode_1.ResponseCode.SERVER_ERROR)
-                    .json({ status: false, message: "Server error" });
-            });
-        }
+        });
     }
 };
+exports.updateUserProfile = updateUserProfile;
 exports.default = {
     register,
     login,
@@ -681,5 +644,5 @@ exports.default = {
     RejectUsers,
     createUserByAdmin,
     logout,
-    updateUserProfile,
+    updateUserProfile: exports.updateUserProfile,
 };

@@ -8,7 +8,8 @@ const upload = multer({ dest: "uploads/" });
 const ADMIN = "admin";
 const SCHOOL = "school";
 const Route = (0, express_1.Router)();
-Route.post("/upload", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN, SCHOOL), upload.single("file"), GalleryController_1.uploadImage);
+Route.post("/upload", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN, SCHOOL), upload.single("image"), // 🔁 changed from 'file' to 'image'
+GalleryController_1.uploadImage);
 Route.put("/approve/:id", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN), GalleryController_1.approveImage);
 Route.put("/reject/:id", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN), GalleryController_1.rejectImage);
 Route.get("/getGalleryImages", GalleryController_1.getGallery);

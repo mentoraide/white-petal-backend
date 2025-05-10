@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const LibraryVideoRecycleBin_1 = require("../controllers/LibraryVideoRecycleBin");
+const Middleware_1 = require("../lib/Utils/Middleware");
+const ADMIN = "admin";
+const Route = (0, express_1.Router)();
+Route.get("/getAllRecycleLibraryVideos", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN), LibraryVideoRecycleBin_1.getAllLibraryRecycleItems);
+Route.post("/restoreRecycleLibraryVideo/:id", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN), LibraryVideoRecycleBin_1.restoreLibraryVideo);
+Route.delete("/permanentDeleteRecycleLibrary/:id", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN), LibraryVideoRecycleBin_1.permanentDeleteLibraryVideo);
+exports.default = Route;
