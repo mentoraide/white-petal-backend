@@ -726,7 +726,7 @@ export const updateUserProfile = (req: AuthRequest, res: Response): void => {
         });
       });
   }
-};
+}; 
 
 export default {
   register,
