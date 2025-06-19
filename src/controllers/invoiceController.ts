@@ -5,6 +5,9 @@ import PDFDocument from "pdfkit";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import VideoModel from "../models/video";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+import s3 from "../lib/Utils/s3";
+import { v4 as uuidv4 } from "uuid";
 
 dotenv.config();
 
@@ -90,6 +93,21 @@ const generateInvoicePDF = (invoice: any): Promise<Buffer> => {
     });
 };
 
+const uploadInvoiceToS3 = async (buffer: Buffer, fileName: string): Promise<string> => {
+    const key = `invoices/${Date.now()}-${uuidv4()}-${fileName}`;
+
+    const command = new PutObjectCommand({
+        Bucket: process.env.AWS_S3_BUCKET_NAME!,
+        Key: key,
+        Body: buffer,
+        ContentType: "application/pdf",
+    });
+
+    await s3.send(command);
+
+    return `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+};
+
 export const createInvoice = async (req: AuthRequest, res: Response): Promise<void> => {
     if (!req.user || !req.user._id) {
         res.status(401).json({ message: "Unauthorized: User not found in request" });
@@ -97,7 +115,6 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
     }
 
     const {
-        invoiceNumber,
         dueDate,
         instructorDetails,
         companyDetails,
@@ -114,11 +131,9 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
         videoIds,
     } = req.body;
 
-    if (
-        !dueDate || !instructorDetails || !companyDetails || !services ||
+    if (!dueDate || !instructorDetails || !companyDetails || !services ||
         subTotal === undefined || taxRate === undefined || taxAmount === undefined ||
-        grandTotal === undefined || !email || !paymentDetails || !status || !videoIds
-    ) {
+        grandTotal === undefined || !email || !paymentDetails || !status || !videoIds) {
         res.status(400).json({ message: "All required fields must be provided" });
         return;
     }
@@ -150,10 +165,10 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
             videoIds,
         }).save();
 
-        // 📄 Generate invoice PDF in memory
         const pdfBuffer = await generateInvoicePDF(invoice);
 
-        // 📧 Send email with PDF attachment (buffer)
+        const invoiceUrl = await uploadInvoiceToS3(pdfBuffer, "invoice.pdf");
+
         const mailOptions = {
             from: process.env.SMTP_MAIL,
             to: invoice.email,
@@ -166,7 +181,7 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
             if (err) {
                 res.status(500).json({ message: "Invoice created but email not sent", error: err.message });
             } else {
-                res.status(201).json({ message: "Invoice created and email sent successfully", invoice });
+                res.status(201).json({ message: "Invoice created, email sent, and uploaded to S3", invoice, invoiceUrl });
             }
         });
     } catch (error) {
