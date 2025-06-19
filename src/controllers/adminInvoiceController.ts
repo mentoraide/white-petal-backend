@@ -26,25 +26,21 @@ const generateInvoiceNumber = (invoiceDate: Date, sequence: number): string => {
     return `INV-${formattedDate}-${sequence.toString().padStart(4, "0")}`;
 };
 
-// Generate invoice PDF with added details
-const generateInvoicePDF = (invoice: any): Promise<string> => {
+const generateInvoicePDF = (invoice: any): Promise<Buffer> => {
     return new Promise((resolve, reject) => {
-        const invoicesDir = path.join(__dirname, "../../invoices");
-
-        if (!fs.existsSync(invoicesDir)) {
-            fs.mkdirSync(invoicesDir, { recursive: true });
-        }
-
-        const invoiceNumber = generateInvoiceNumber(new Date(invoice.createdAt), invoice.sequence || 1);
-        const filePath = path.join(invoicesDir, `${invoiceNumber}.pdf`);
-        const stream = fs.createWriteStream(filePath);
         const doc = new PDFDocument();
+        const buffers: Buffer[] = [];
 
-        doc.pipe(stream);
+        doc.on("data", buffers.push.bind(buffers));
+        doc.on("end", () => {
+            const pdfData = Buffer.concat(buffers);
+            resolve(pdfData);
+        });
 
         // Invoice Header
         doc.fontSize(20).text("Invoice", { align: "center" });
         doc.moveDown();
+        const invoiceNumber = generateInvoiceNumber(new Date(invoice.createdAt), invoice.sequence || 1);
         doc.fontSize(14).text(`Invoice ID: ${invoiceNumber}`, { align: "center" });
         doc.moveDown();
         doc.text("------------------------------------------------------------");
@@ -63,37 +59,33 @@ const generateInvoicePDF = (invoice: any): Promise<string> => {
         doc.text(`Instructor Email: ${invoice.instructor?.email || "N/A"}`);
         doc.moveDown();
 
-        // Services Provided (Courses/Services)
+        // Services Provided
         doc.text("Services Provided", { underline: true });
-        if (invoice.services && Array.isArray(invoice.services) && invoice.services.length > 0) {
+        if (Array.isArray(invoice.services) && invoice.services.length > 0) {
             invoice.services.forEach((service: any, index: number) => {
-                const title = service.title ? service.title : "N/A";
+                const title = service.title || "N/A";
                 const totalAmount = service.totalAmount ? `$${service.totalAmount.toFixed(2)}` : "$0.00";
 
-                // Separator line before each service (except the first one)
                 if (index > 0) {
-                    doc.moveDown(0.5); // Small space before the separator
+                    doc.moveDown(0.5);
                     doc.text("----------------------------------------");
-                    doc.moveDown(0.5); // Small space after the separator
+                    doc.moveDown(0.5);
                 }
 
-                // Service details
                 doc.text(`${index + 1}. ${title} - Amount: ${totalAmount}`);
             });
         } else {
             doc.text("No services available.");
         }
-
         doc.moveDown();
-
 
         // Payment Summary
         doc.text("Payment Summary", { underline: true });
         doc.fontSize(14).text("Total Amount:", { underline: true });
         doc.fontSize(12).text(`Subtotal: $${invoice.subTotal}`).moveDown(0.5); 
-        doc.text(`Tax (${invoice.taxRate}%): $${invoice.taxAmount}`).moveDown(0.5); // 0.5 line gap
+        doc.text(`Tax (${invoice.taxRate}%): $${invoice.taxAmount}`).moveDown(0.5); 
         doc.text(`Discount: $${invoice.discount || 0}`).moveDown(0.5); 
-        doc.text(`Grand Total: $${invoice.grandTotal}`).moveDown(1); // 1 line gap
+        doc.text(`Grand Total: $${invoice.grandTotal}`).moveDown(1);
 
         // Payment Details
         doc.text("Payment Details", { underline: true });
@@ -111,23 +103,19 @@ const generateInvoicePDF = (invoice: any): Promise<string> => {
             doc.text(`Rejection Date: ${invoice.rejectionDate ? invoice.rejectionDate.toLocaleDateString() : "N/A"}`);
             doc.text(`Rejection Reason: ${invoice.rejectionReason || "Rejected due to issues with the video and money"}`);
         } else {
-            // Optionally handle cases where the status is neither Approved or Rejected
-            doc.text("Status: Pending", { underline: true }); // If the status is pending or undefined
+            doc.text("Status: Pending", { underline: true });
         }
 
-        // Notes Section 
+        // Notes
         doc.fontSize(14).text("Notes:", { underline: true });
         doc.fontSize(12).text("[Admin Remarks]").moveDown(1); 
 
         doc.end();
-
-        stream.on("finish", () => resolve(filePath));
-        stream.on("error", (err) => reject(err));
     });
 };
 
 // Send invoice email
-const sendInvoiceEmail = (email: string, invoicePath: string): Promise<void> => {
+const sendInvoiceEmail = (email: string, pdfBuffer: Buffer): Promise<void> => {
     if (!email) {
         return Promise.reject(new Error("Email is required for sending invoices"));
     }
@@ -137,9 +125,16 @@ const sendInvoiceEmail = (email: string, invoicePath: string): Promise<void> => 
         to: email,
         subject: "Your Invoice",
         text: "Please find attached your invoice.",
-        attachments: [{ filename: "invoice.pdf", path: invoicePath }],
-    }).then(() => { });
+        attachments: [
+            {
+                filename: "invoice.pdf",
+                content: pdfBuffer,
+                contentType: "application/pdf",
+            },
+        ],
+    }).then(() => {});
 };
+
 
 // Approve invoice and send email
 export const approveInvoice = (req: Request, res: Response) => {

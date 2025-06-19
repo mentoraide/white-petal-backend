@@ -9,8 +9,8 @@ import {
   getPendingImages,
 } from "../controllers/GalleryController";
 import { authenticate, authorizeRoles } from "../lib/Utils/Middleware";
-const multer = require("multer");
-const upload = multer({ dest: "uploads/" });
+
+import { upload } from "../lib/Utils/s3Uploader"; // ✅ S3 upload middleware
 
 const ADMIN = "admin";
 const SCHOOL = "school";
@@ -21,9 +21,15 @@ Route.post(
   "/upload",
   authenticate,
   authorizeRoles(ADMIN, SCHOOL),
+<<<<<<< HEAD
   upload.single("image"), // 🔁 changed from 'file' to 'image'
+=======
+  upload.single("file"), // ✅ this now goes to S3
+>>>>>>> main
   uploadImage
 );
+
+
 Route.put("/approve/:id", authenticate, authorizeRoles(ADMIN), approveImage);
 Route.put("/reject/:id", authenticate, authorizeRoles(ADMIN), rejectImage);
 Route.get("/getGalleryImages", getGallery);
