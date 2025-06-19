@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from "mongoose";
 import passwordHash from "password-hash";
 
 export interface IUser extends Document {
+  _id: any;
   name: string;
   email: string;
   password: string;
@@ -14,10 +15,10 @@ export interface IUser extends Document {
   token?: string;
   createdOn?: Date;
   updatedOn?: Date;
-  approved?: boolean; 
+  approved?: boolean;
   resetPasswordToken?: string;
   resetPasswordExpires?: number;
-  
+
   comparePassword: (candidatePassword: string) => boolean;
 }
 
@@ -32,19 +33,25 @@ const UserSchema = new Schema<IUser>({
     enum: ["admin", "instructor", "school", "user"],
     default: "user",
   },
-  schoolId: {type:String },
+  schoolId: { type: String },
   phone: { type: String },
   address: { type: String },
   bio: { type: String },
+<<<<<<< HEAD
   profileImage: { type: String }, 
   approved: { type: Boolean, default: false }, 
 },{ timestamps: { createdAt: "createdOn", updatedAt: "updatedOn"  }
 });
+=======
+  profileImage: { type: String },
+  approved: { type: Boolean, default: false },
+}, { timestamps: true });
+>>>>>>> main
 
 // Pre-save hook: Auto-approve "admin" & "user"
 UserSchema.pre("save", function (next) {
   if (this.role === "admin") {
-    this.approved = true; 
+    this.approved = true;
   }
   next();
 });
