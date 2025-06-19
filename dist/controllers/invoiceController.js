@@ -12,13 +12,17 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getInvoicePDF = exports.deleteInvoice = exports.updateInvoice = exports.getInvoices = exports.getInvoiceById = exports.createInvoice = void 0;
+exports.createInvoice = void 0;
 const Invoice_1 = __importDefault(require("../models/Invoice"));
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const dotenv_1 = __importDefault(require("dotenv"));
+HEAD;
 const stream_1 = require("stream");
 const Cloundinary_1 = __importDefault(require("../lib/Utils/Cloundinary"));
+const client_s3_1 = require("@aws-sdk/client-s3");
+const s3_1 = __importDefault(require("../lib/Utils/s3"));
+const uuid_1 = require("uuid");
 dotenv_1.default.config();
 const transporter = nodemailer_1.default.createTransport({
     service: process.env.SMTP_SERVICE,
@@ -83,6 +87,17 @@ const generateInvoicePDF = (invoice) => {
         doc.end();
     });
 };
+const uploadInvoiceToS3 = (buffer, fileName) => __awaiter(void 0, void 0, void 0, function* () {
+    const key = `invoices/${Date.now()}-${(0, uuid_1.v4)()}-${fileName}`;
+    const command = new client_s3_1.PutObjectCommand({
+        Bucket: process.env.AWS_S3_BUCKET_NAME,
+        Key: key,
+        Body: buffer,
+        ContentType: "application/pdf",
+    });
+    yield s3_1.default.send(command);
+    return `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+});
 const createInvoice = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     if (!req.user || !req.user._id) {
         res.status(401).json({ message: "Unauthorized: User not found in request" });
@@ -151,79 +166,93 @@ const createInvoice = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                     });
                 }
             });
+            const invoiceUrl = yield uploadInvoiceToS3(pdfBuffer, "invoice.pdf");
+            const mailOptions = {
+                from: process.env.SMTP_MAIL,
+                to: invoice.email,
+                subject: "Invoice Generated",
+                text: "Please find your invoice attached.",
+                attachments: [{ filename: "invoice.pdf", content: pdfBuffer }],
+            };
+            transporter.sendMail(mailOptions, (err) => {
+                if (err) {
+                    res.status(500).json({ message: "Invoice created but email not sent", error: err.message });
+                }
+                else {
+                    res.status(201).json({ message: "Invoice created, email sent, and uploaded to S3", invoice, invoiceUrl });
+                }
+            });
+            const readable = new stream_1.Readable();
+            readable.push(pdfBuffer);
+            readable.push(null);
+            readable.pipe(uploadStream);
         }));
-        const readable = new stream_1.Readable();
-        readable.push(pdfBuffer);
-        readable.push(null);
-        readable.pipe(uploadStream);
+        try { }
+        catch (error) {
+            console.error("Error creating invoice:", error);
+            res.status(500).json({ message: "Internal Server Error" });
+        }
     }
-    catch (error) {
-        console.error("Error creating invoice:", error);
-        res.status(500).json({ message: "Internal Server Error" });
-    }
+    finally { }
+    ;
+    export const getInvoiceById = (req, res) => {
+        Invoice_1.default.findById(req.params.invoiceId)
+            .then((invoice) => {
+            if (!invoice) {
+                res.status(404).json({ message: "Invoice not found" });
+                return;
+            }
+            res.status(200).json(invoice);
+        })
+            .catch((error) => res.status(400).json({ message: error.message }));
+    };
+    export const getInvoices = (req, res) => {
+        Invoice_1.default.find()
+            .then((invoices) => res.status(200).json(invoices))
+            .catch((error) => res.status(500).json({ message: error.message }));
+    };
+    export const updateInvoice = (req, res) => {
+        Invoice_1.default.findByIdAndUpdate(req.params.invoiceId, req.body, { new: true, runValidators: true })
+            .then((updatedInvoice) => {
+            if (!updatedInvoice) {
+                res.status(404).json({ message: "Invoice not found" });
+                return;
+            }
+            res.status(200).json(updatedInvoice);
+        })
+            .catch((error) => res.status(400).json({ message: error.message }));
+    };
+    export const deleteInvoice = (req, res) => {
+        Invoice_1.default.findByIdAndDelete(req.params.invoiceId)
+            .then((deletedInvoice) => {
+            if (!deletedInvoice) {
+                res.status(404).json({ message: "Invoice not found" });
+                return;
+            }
+            res.status(200).json({ message: "Invoice deleted successfully" });
+        })
+            .catch((error) => res.status(400).json({ message: error.message }));
+    };
+    // ✅ New function to generate & serve PDF for download
+    export const getInvoicePDF = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            const invoice = yield Invoice_1.default.findById(req.params.invoiceId);
+            if (!invoice) {
+                res.status(404).json({ message: "Invoice not found" });
+                return;
+            }
+            const pdfBuffer = yield generateInvoicePDF(invoice);
+            res.set({
+                'Content-Type': 'application/pdf',
+                'Content-Disposition': `attachment; filename=invoice-${invoice.invoiceNumber}.pdf`,
+                'Content-Length': pdfBuffer.length,
+            });
+            res.send(pdfBuffer);
+        }
+        catch (error) {
+            console.error("Error generating invoice PDF:", error);
+            res.status(500).json({ message: "Internal Server Error" });
+        }
+    });
 });
 exports.createInvoice = createInvoice;
-const getInvoiceById = (req, res) => {
-    Invoice_1.default.findById(req.params.invoiceId)
-        .then((invoice) => {
-        if (!invoice) {
-            res.status(404).json({ message: "Invoice not found" });
-            return;
-        }
-        res.status(200).json(invoice);
-    })
-        .catch((error) => res.status(400).json({ message: error.message }));
-};
-exports.getInvoiceById = getInvoiceById;
-const getInvoices = (req, res) => {
-    Invoice_1.default.find()
-        .then((invoices) => res.status(200).json(invoices))
-        .catch((error) => res.status(500).json({ message: error.message }));
-};
-exports.getInvoices = getInvoices;
-const updateInvoice = (req, res) => {
-    Invoice_1.default.findByIdAndUpdate(req.params.invoiceId, req.body, { new: true, runValidators: true })
-        .then((updatedInvoice) => {
-        if (!updatedInvoice) {
-            res.status(404).json({ message: "Invoice not found" });
-            return;
-        }
-        res.status(200).json(updatedInvoice);
-    })
-        .catch((error) => res.status(400).json({ message: error.message }));
-};
-exports.updateInvoice = updateInvoice;
-const deleteInvoice = (req, res) => {
-    Invoice_1.default.findByIdAndDelete(req.params.invoiceId)
-        .then((deletedInvoice) => {
-        if (!deletedInvoice) {
-            res.status(404).json({ message: "Invoice not found" });
-            return;
-        }
-        res.status(200).json({ message: "Invoice deleted successfully" });
-    })
-        .catch((error) => res.status(400).json({ message: error.message }));
-};
-exports.deleteInvoice = deleteInvoice;
-// ✅ New function to generate & serve PDF for download
-const getInvoicePDF = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const invoice = yield Invoice_1.default.findById(req.params.invoiceId);
-        if (!invoice) {
-            res.status(404).json({ message: "Invoice not found" });
-            return;
-        }
-        const pdfBuffer = yield generateInvoicePDF(invoice);
-        res.set({
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `attachment; filename=invoice-${invoice.invoiceNumber}.pdf`,
-            'Content-Length': pdfBuffer.length,
-        });
-        res.send(pdfBuffer);
-    }
-    catch (error) {
-        console.error("Error generating invoice PDF:", error);
-        res.status(500).json({ message: "Internal Server Error" });
-    }
-});
-exports.getInvoicePDF = getInvoicePDF;

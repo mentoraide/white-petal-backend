@@ -15,12 +15,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.permanentDeleteLibraryVideo = exports.restoreLibraryVideo = exports.getAllLibraryRecycleItems = void 0;
 const LibraryVideoRecycleBinModel_1 = __importDefault(require("../models/LibraryVideoRecycleBinModel"));
 const LibraryBook_1 = __importDefault(require("../models/LibraryBook")); // Main model
-const getAllLibraryRecycleItems = (req, res) => {
-    LibraryVideoRecycleBinModel_1.default.find()
-        .populate("uploadedBy", "name email")
-        .then((items) => res.json(items))
-        .catch((err) => res.status(500).json({ message: err.message }));
-};
+const getAllLibraryRecycleItems = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const items = yield LibraryVideoRecycleBinModel_1.default.find().populate("uploadedBy", "name email");
+        res.status(200).json(items);
+    }
+    catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
 exports.getAllLibraryRecycleItems = getAllLibraryRecycleItems;
 const restoreLibraryVideo = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -44,7 +47,9 @@ const restoreLibraryVideo = (req, res) => __awaiter(void 0, void 0, void 0, func
         });
         yield restoredVideo.save();
         yield LibraryVideoRecycleBinModel_1.default.findByIdAndDelete(item._id);
-        res.status(200).json({ message: "Video restored successfully", restoredVideo });
+        res
+            .status(200)
+            .json({ message: "Video restored successfully", restoredVideo });
     }
     catch (err) {
         res.status(500).json({ message: err.message });
@@ -58,7 +63,9 @@ const permanentDeleteLibraryVideo = (req, res) => __awaiter(void 0, void 0, void
             res.status(404).json({ message: "Recycle item not found" });
             return;
         }
-        res.status(200).json({ message: "Library video permanently deleted from Recycle Bin" });
+        res
+            .status(200)
+            .json({ message: "Library video permanently deleted from Recycle Bin" });
     }
     catch (err) {
         res.status(500).json({ message: err.message });

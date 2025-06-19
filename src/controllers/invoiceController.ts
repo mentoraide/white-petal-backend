@@ -4,16 +4,12 @@ import { IUser } from "../models/user";
 import PDFDocument from "pdfkit";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
-import VideoModel from "../models/video";
-<<<<<<< HEAD
+import VideoModel from "../models/video"; HEAD
 import { Readable } from "stream";
 import cloudinary from "../lib/Utils/Cloundinary";
-
-=======
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import s3 from "../lib/Utils/s3";
 import { v4 as uuidv4 } from "uuid";
->>>>>>> main
 
 dotenv.config();
 
@@ -173,7 +169,6 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
 
         const pdfBuffer = await generateInvoicePDF(invoice);
 
-<<<<<<< HEAD
         // Upload to Cloudinary with .pdf extension for download support
         const uploadStream = cloudinary.uploader.upload_stream(
             {
@@ -208,7 +203,7 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
                         });
                     }
                 });
-=======
+
         const invoiceUrl = await uploadInvoiceToS3(pdfBuffer, "invoice.pdf");
 
         const mailOptions = {
@@ -224,7 +219,6 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
                 res.status(500).json({ message: "Invoice created but email not sent", error: err.message });
             } else {
                 res.status(201).json({ message: "Invoice created, email sent, and uploaded to S3", invoice, invoiceUrl });
->>>>>>> main
             }
         );
 

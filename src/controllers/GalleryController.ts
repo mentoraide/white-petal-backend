@@ -1,11 +1,8 @@
 import { Response } from "express";
 import { AuthRequest } from "../lib/Utils/Middleware";
 import Gallery from "../models/Gallery";
-<<<<<<< HEAD
 import GalleryRecycleBin from "../models/GalleryRecyclebin";
 import fs from "fs";
-=======
->>>>>>> main
 
 interface MulterS3File extends Express.Multer.File {
   location: string;

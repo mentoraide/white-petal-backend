@@ -165,16 +165,17 @@ exports.updateVideo = updateVideo;
 //     })
 //     .catch((error) => res.status(400).json({ message: error.message }));
 // };
-// Updated Delete Video (Soft Delete)
-const deleteVideo = (req, res) => {
-    video_1.default.findById(req.params.id)
-        .then((video) => {
+// ✅ DELETE VIDEO and move to Recycle Bin
+const deleteVideo = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const video = yield video_1.default.findById(req.params.id);
         if (!video) {
             res.status(404).json({ message: "Video not found" });
             return;
         }
+        // Create recycle bin entry
         const recycleEntry = new recycleBin_1.default({
-            originalVideoId: video._id,
+            originalVideoId: video._id, // <-- original video ID saved
             courseName: video.courseName,
             courseContent: video.courseContent,
             videoUrl: video.videoUrl,
@@ -184,20 +185,15 @@ const deleteVideo = (req, res) => {
             uploadedBy: video.uploadedBy,
             deletedAt: new Date(),
         });
-        recycleEntry.save().then(() => {
-            return video_1.default.findByIdAndDelete(video._id);
-        })
-            .then(() => {
-            res.status(200).json({ message: "Video moved to Recycle Bin successfully" });
-        })
-            .catch((error) => {
-            res.status(500).json({ message: "Error while deleting video", error: error.message });
-        });
-    })
-        .catch((error) => {
-        res.status(500).json({ message: error.message });
-    });
-};
+        yield recycleEntry.save(); // Save recycle entry
+        yield video_1.default.findByIdAndDelete(video._id); // Delete original video
+        res.status(200).json({ message: "Video moved to Recycle Bin successfully" });
+    }
+    catch (error) {
+        console.error("Error in deleteVideo:", error.message);
+        res.status(500).json({ message: "Error while deleting video", error: error.message });
+    }
+});
 exports.deleteVideo = deleteVideo;
 // Get Instructor Profile
 const getInstructorProfile = (req, res) => {

@@ -16,12 +16,16 @@ exports.permanentDeleteVideo = exports.restoreVideo = exports.getAllRecycleItems
 const recycleBin_1 = __importDefault(require("../models/recycleBin"));
 const video_1 = __importDefault(require("../models/video"));
 // Get All Recycle Bin Videos
-const getAllRecycleItems = (req, res) => {
-    recycleBin_1.default.find()
-        .populate("uploadedBy", "name email")
-        .then((items) => res.json(items))
-        .catch((err) => res.status(500).json({ message: err.message }));
-};
+// Get All Recycle Bin Videos
+const getAllRecycleItems = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const items = yield recycleBin_1.default.find().populate("uploadedBy", "name email");
+        res.status(200).json(items);
+    }
+    catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
 exports.getAllRecycleItems = getAllRecycleItems;
 // Restore Video
 const restoreVideo = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -43,7 +47,9 @@ const restoreVideo = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         });
         yield restoredVideo.save();
         yield recycleBin_1.default.findByIdAndDelete(item._id);
-        res.status(200).json({ message: "Video restored successfully", restoredVideo });
+        res
+            .status(200)
+            .json({ message: "Video restored successfully", restoredVideo });
     }
     catch (err) {
         res.status(500).json({ message: err.message });
@@ -58,7 +64,9 @@ const permanentDeleteVideo = (req, res) => __awaiter(void 0, void 0, void 0, fun
             res.status(404).json({ message: "Recycle item not found" });
             return;
         }
-        res.status(200).json({ message: "Video permanently deleted from Recycle Bin" });
+        res
+            .status(200)
+            .json({ message: "Video permanently deleted from Recycle Bin" });
     }
     catch (err) {
         res.status(500).json({ message: err.message });

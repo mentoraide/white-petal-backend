@@ -116,8 +116,7 @@ const login = (req, res) => {
             });
             return Promise.reject("User not found");
         }
-        if ((updatedUser.role === "instructor" ||
-            updatedUser.role === "school") &&
+        if ((updatedUser.role === "instructor" || updatedUser.role === "school") &&
             updatedUser.approved !== true) {
             res.status(ResponseCode_1.ResponseCode.FORBIDDEN).json({
                 status: false,
@@ -159,6 +158,7 @@ const login = (req, res) => {
 };
 // Forgot Password
 const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    console.log(req.body);
     const { email } = req.body;
     try {
         const user = yield user_1.default.findOne({ email });
@@ -169,13 +169,16 @@ const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function*
             });
             return;
         }
+        // Generate reset token
         const resetToken = crypto_1.default.randomBytes(32).toString("hex");
-        const hashedToken = crypto_1.default.createHash("sha256").update(resetToken).digest("hex");
+        const hashedToken = crypto_1.default
+            .createHash("sha256")
+            .update(resetToken)
+            .digest("hex");
         user.resetPasswordToken = hashedToken;
-        user.resetPasswordExpires = Date.now() + 3600000; // Store as number for compatibility
+        user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
         yield user.save({ validateBeforeSave: false });
-        // console.log("Reset Token:", resetToken); // Debugging
-        // console.log("Hashed Token:", hashedToken);
+        // Create email transporter
         const transporter = nodemailer_1.default.createTransport({
             host: process.env.SMTP_HOST,
             port: Number(process.env.SMTP_PORT),
@@ -185,24 +188,34 @@ const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function*
                 pass: process.env.SMTP_PASSWORD,
             },
         });
+        const resetLink = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
         const mailOptions = {
-            from: process.env.SMTP_MAIL,
+            from: `"Your App Name" <${process.env.SMTP_MAIL}>`,
             to: user.email,
-            subject: "Password Reset Request",
-            text: `You requested a password reset. Click the link to reset: ${process.env.CLIENT_URL}/reset-password/${resetToken}`,
+            subject: "Reset Your Password",
+            html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+          <h2>Password Reset Request</h2>
+          <p>Hello ${user.name || "User"},</p>
+          <p>You requested to reset your password. Click the button below to proceed:</p>
+          <a href="${resetLink}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px;">Reset Password</a>
+          <p>If the button doesn't work, copy and paste this link into your browser:</p>
+          <p><a href="${resetLink}">${resetLink}</a></p>
+          <p>This link will expire in 1 hour.</p>
+        </div>
+      `,
         };
-        const info = yield transporter.sendMail(mailOptions);
-        // console.log("Email sent: ", info.response);
+        yield transporter.sendMail(mailOptions);
         res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
             status: true,
             message: "Password reset link sent to your email.",
         });
     }
     catch (error) {
-        console.error("Error in forgotPassword:", error); // Debugging
+        console.error("Error in forgotPassword:", error);
         res.status(ResponseCode_1.ResponseCode.SERVER_ERROR).json({
             status: false,
-            message: "Server error",
+            message: "Something went wrong while sending reset email",
         });
     }
 });
@@ -562,7 +575,7 @@ const updateUserProfile = (req, res) => {
                     role: updatedUser.role,
                     approved: updatedUser.approved,
                     createdAt: updatedUser.createdOn,
-                    updatedAt: updatedUser.updatedOn
+                    updatedAt: updatedUser.updatedOn,
                 };
                 res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
                     status: true,
@@ -607,7 +620,7 @@ const updateUserProfile = (req, res) => {
                     role: updatedUser.role,
                     approved: updatedUser.approved,
                     createdAt: updatedUser.createdOn,
-                    updatedAt: updatedUser.updatedOn
+                    updatedAt: updatedUser.updatedOn,
                 };
                 res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
                     status: true,

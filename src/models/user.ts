@@ -37,16 +37,13 @@ const UserSchema = new Schema<IUser>({
   phone: { type: String },
   address: { type: String },
   bio: { type: String },
-<<<<<<< HEAD
   profileImage: { type: String }, 
   approved: { type: Boolean, default: false }, 
 },{ timestamps: { createdAt: "createdOn", updatedAt: "updatedOn"  }
 });
-=======
   profileImage: { type: String },
   approved: { type: Boolean, default: false },
 }, { timestamps: true });
->>>>>>> main
 
 // Pre-save hook: Auto-approve "admin" & "user"
 UserSchema.pre("save", function (next) {
