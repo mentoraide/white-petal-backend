@@ -7,8 +7,7 @@ const s3Uploader_1 = require("../lib/Utils/s3Uploader"); // ✅ S3 upload middle
 const ADMIN = "admin";
 const SCHOOL = "school";
 const Route = (0, express_1.Router)();
-Route.post("/upload", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN, SCHOOL), s3Uploader_1.upload.single("image"), // 🔁 changed from 'file' to 'image'
-s3Uploader_1.upload.single("file"), // ✅ this now goes to S3
+Route.post("/upload", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN, SCHOOL), s3Uploader_1.upload.single("file"), // ✅ this now goes to S3
 GalleryController_1.uploadImage);
 Route.put("/approve/:id", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN), GalleryController_1.approveImage);
 Route.put("/reject/:id", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)(ADMIN), GalleryController_1.rejectImage);
