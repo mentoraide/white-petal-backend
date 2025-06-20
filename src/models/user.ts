@@ -2,7 +2,7 @@ import mongoose, { Document, Schema } from "mongoose";
 import passwordHash from "password-hash";
 
 export interface IUser extends Document {
-  _id: any;
+  _id: mongoose.Types.ObjectId;
   name: string;
   email: string;
   password: string;
@@ -22,31 +22,32 @@ export interface IUser extends Document {
   comparePassword: (candidatePassword: string) => boolean;
 }
 
-const UserSchema = new Schema<IUser>({
-  name: { type: String, required: true, unique: true },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  resetPasswordToken: { type: String }, // Added this field
-  resetPasswordExpires: { type: Number }, // Added this field
-  role: {
-    type: String,
-    enum: ["admin", "instructor", "school", "user"],
-    default: "user",
+const UserSchema = new Schema<IUser>(
+  {
+    name: { type: String, required: true, unique: true },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    resetPasswordToken: { type: String },
+    resetPasswordExpires: { type: Number },
+    role: {
+      type: String,
+      enum: ["admin", "instructor", "school", "user"],
+      default: "user",
+    },
+    schoolId: { type: String },
+    phone: { type: String },
+    address: { type: String },
+    bio: { type: String },
+    profileImage: { type: String },
+    approved: { type: Boolean, default: false },
   },
-  schoolId: { type: String },
-  phone: { type: String },
-  address: { type: String },
-  bio: { type: String },
-  profileImage: { type: String }, 
-  approved: { type: Boolean, default: false }, 
-},{ timestamps: { createdAt: "createdOn", updatedAt: "updatedOn"  }
-});
-  profileImage: { type: String },
-  approved: { type: Boolean, default: false },
-}, { timestamps: true });
+  {
+    timestamps: { createdAt: "createdOn", updatedAt: "updatedOn" },
+  }
+);
 
-// Pre-save hook: Auto-approve "admin" & "user"
-UserSchema.pre("save", function (next) {
+// Pre-save hook: Auto-approve "admin"
+UserSchema.pre<IUser>("save", function (next) {
   if (this.role === "admin") {
     this.approved = true;
   }
@@ -54,7 +55,9 @@ UserSchema.pre("save", function (next) {
 });
 
 // Compare passwords
-UserSchema.methods.comparePassword = function (candidatePassword: string): boolean {
+UserSchema.methods.comparePassword = function (
+  candidatePassword: string
+): boolean {
   return passwordHash.verify(candidatePassword, this.password);
 };
 

@@ -47,7 +47,7 @@ const uploadVideo = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             videoUrl: videoUpload.secure_url,
             description: req.body.description,
             status: req.body.status || "pending",
-            uploadedBy: req.user._id,
+            uploadedBy: req.user._id.toString(), // ✅ FIXED HERE,
             watchedBy: [],
             thumbnailUrl: thumbnailUpload.secure_url,
         });

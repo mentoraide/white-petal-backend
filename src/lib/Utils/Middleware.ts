@@ -2,14 +2,12 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import UserModel, { IUser } from "../../models/user";
 import { ResponseCode } from "../Utils/ResponseCode";
+import { ParsedQs } from "qs";
 
 // Extend Request object to include user data
-export interface AuthRequest extends Request {
-	file: any;
-	body: any;
-	params: any;
-	query: any;
-	user?: IUser;
+export interface AuthRequest extends Request<any, any, any, ParsedQs> {
+  file?: any;
+  user?: IUser;
 }
 
 // Verify JWT and set `req.user` using Promises
@@ -32,13 +30,12 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
 					res.status(ResponseCode.UNAUTHORIZED).json({ message: "User not found" });
 					return;
 				}
-				req.user = user; // ✅ Fix here
+				req.user = user;
 				next();
 			})
 			.catch(() => res.status(ResponseCode.SERVER_ERROR).json({ message: "Server error" }));
 	});
 };
-
 
 // Role-based access control middleware using Promises
 export const authorizeRoles = (...roles: string[]) => {

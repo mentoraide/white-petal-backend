@@ -21,7 +21,6 @@ Route.post(
   "/upload",
   authenticate,
   authorizeRoles(ADMIN, SCHOOL),
-  upload.single("image"), // 🔁 changed from 'file' to 'image'
   upload.single("file"), // ✅ this now goes to S3
   uploadImage
 );

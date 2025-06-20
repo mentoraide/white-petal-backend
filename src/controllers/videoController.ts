@@ -57,7 +57,7 @@ export const uploadVideo = async (
       videoUrl: videoUpload.secure_url,
       description: req.body.description,
       status: req.body.status || "pending",
-      uploadedBy: (req.user as CustomUser)._id,
+       uploadedBy: req.user._id.toString(), // ✅ FIXED HERE,
       watchedBy: [],
       thumbnailUrl: thumbnailUpload.secure_url,
     });
