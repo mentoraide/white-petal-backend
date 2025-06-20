@@ -22,6 +22,9 @@ const GalleryRoute_1 = __importDefault(require("./routes/GalleryRoute"));
 const videoSettingRoutes_1 = __importDefault(require("./routes/videoSettingRoutes"));
 const chatRoute_1 = __importDefault(require("./routes/chatRoute"));
 const socket_1 = require("./lib/Utils/socket");
+const recyclebinRoutes_1 = __importDefault(require("./routes/recyclebinRoutes"));
+const LibraryRecycleBinRoute_1 = __importDefault(require("./routes/LibraryRecycleBinRoute"));
+const GalleryRecycleBinRoutes_1 = __importDefault(require("./routes/GalleryRecycleBinRoutes"));
 const path_1 = __importDefault(require("path"));
 dotenv_1.default.config();
 // Mongodb Connection
@@ -51,6 +54,9 @@ socket_1.app.use("/api/v1/gallery", GalleryRoute_1.default);
 socket_1.app.use("/api/v1/program", ProgramRoutes_1.default);
 socket_1.app.use("/api/v1/chat", chatRoute_1.default);
 socket_1.app.use("/api/v1/VideoSetting", videoSettingRoutes_1.default);
+socket_1.app.use("/api/v1/recycle-bin", recyclebinRoutes_1.default);
+socket_1.app.use("/api/v1/Libraryrecyclebin", LibraryRecycleBinRoute_1.default);
+socket_1.app.use("/api/v1/Galleryrecyclebin", GalleryRecycleBinRoutes_1.default);
 const PORT = process.env.PORT || 3000;
 socket_1.app.use(express_1.default.static(path_1.default.join(__dirname, "../build")));
 socket_1.app.use(function (req, res) {

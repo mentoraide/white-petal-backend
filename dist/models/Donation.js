@@ -44,6 +44,10 @@ const DonationSchema = new mongoose_1.Schema({
         type: Number,
         required: true,
     },
+    donerName: {
+        type: String,
+        required: true,
+    },
     isAnonymous: {
         type: Boolean,
         default: false,

@@ -26,7 +26,7 @@ const authenticate = (req, res, next) => {
                 res.status(ResponseCode_1.ResponseCode.UNAUTHORIZED).json({ message: "User not found" });
                 return;
             }
-            req.user = user; // ✅ Fix here
+            req.user = user;
             next();
         })
             .catch(() => res.status(ResponseCode_1.ResponseCode.SERVER_ERROR).json({ message: "Server error" }));

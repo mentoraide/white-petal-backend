@@ -42,8 +42,8 @@ const UserSchema = new mongoose_1.Schema({
     name: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    resetPasswordToken: { type: String }, // Added this field
-    resetPasswordExpires: { type: Number }, // Added this field
+    resetPasswordToken: { type: String },
+    resetPasswordExpires: { type: Number },
     role: {
         type: String,
         enum: ["admin", "instructor", "school", "user"],
@@ -55,8 +55,10 @@ const UserSchema = new mongoose_1.Schema({
     bio: { type: String },
     profileImage: { type: String },
     approved: { type: Boolean, default: false },
-}, { timestamps: true });
-// Pre-save hook: Auto-approve "admin" & "user"
+}, {
+    timestamps: { createdAt: "createdOn", updatedAt: "updatedOn" },
+});
+// Pre-save hook: Auto-approve "admin"
 UserSchema.pre("save", function (next) {
     if (this.role === "admin") {
         this.approved = true;

@@ -57,7 +57,7 @@ export const uploadVideo = async (
       videoUrl: videoUpload.secure_url,
       description: req.body.description,
       status: req.body.status || "pending",
-      uploadedBy: (req.user as CustomUser)._id,
+       uploadedBy: req.user._id.toString(), // ✅ FIXED HERE,
       watchedBy: [],
       thumbnailUrl: thumbnailUpload.secure_url,
     });
@@ -102,16 +102,16 @@ export const getAllVideos = (req: Request, res: Response): void => {
 export const updateVideo = (req: AuthRequest, res: Response): void => {
   if (!req.user || !req.user.id) {
     res.status(401).json({ message: "Unauthorized: No user found" });
-    return;
   }
-  const files = req.files as
-    | { [key: string]: Express.Multer.File[] }
-    | undefined;
+
+  const files = req.files as { [key: string]: Express.Multer.File[] } | undefined;
+  
   if (!files) {
     console.error("No files received");
   }
-  //   console.log(req.body);
+
   const { courseName, courseContent, description, rank } = req.body;
+  
   const updateFields: Partial<{
     courseName: string;
     courseContent: string;
@@ -126,7 +126,7 @@ export const updateVideo = (req: AuthRequest, res: Response): void => {
   if (description) updateFields.description = description;
   if (rank) updateFields.rank = rank;
 
-  // Upload video & thumbnail if provided
+  // If no files are uploaded, proceed with updating text fields only
   const videoPromise = files?.video
     ? cloudinary.uploader.upload(files.video[0].path, {
         resource_type: "video",
@@ -143,10 +143,17 @@ export const updateVideo = (req: AuthRequest, res: Response): void => {
 
   Promise.all([videoPromise, thumbnailPromise])
     .then(([videoUpload, thumbnailUpload]) => {
-      if (videoUpload) updateFields.videoUrl = videoUpload.secure_url;
-      if (thumbnailUpload)
+      // Only update URLs if uploads are successful
+      if (videoUpload) {
+        // Ensure videoUrl is assigned properly from Cloudinary's response
+        updateFields.videoUrl = videoUpload.secure_url;
+      }
+      if (thumbnailUpload) {
+        // Ensure thumbnailUrl is assigned properly from Cloudinary's response
         updateFields.thumbnailUrl = thumbnailUpload.secure_url;
+      }
 
+      // Proceed with video update
       return VideoModel.findByIdAndUpdate(
         req.params.id,
         { $set: updateFields },
@@ -155,20 +162,21 @@ export const updateVideo = (req: AuthRequest, res: Response): void => {
     })
     .then((updatedVideo) => {
       if (!updatedVideo) {
-        res
-          .status(404)
-          .json({ message: "Video not found or unauthorized update attempt" });
-        return;
+        return res.status(404).json({
+          message: "Video not found or unauthorized update attempt",
+        });
       }
-      res
-        .status(200)
-        .json({ message: "Video updated successfully", updatedVideo });
+      res.status(200).json({
+        message: "Video updated successfully",
+        updatedVideo,
+      });
     })
     .catch((error) => {
       console.error("Error updating video:", error);
-      res
-        .status(500)
-        .json({ message: "Internal server error", error: error.message });
+      res.status(500).json({
+        message: "Internal server error",
+        error: error.message,
+      });
     });
 };
 
@@ -185,40 +193,36 @@ export const updateVideo = (req: AuthRequest, res: Response): void => {
 //     .catch((error) => res.status(400).json({ message: error.message }));
 // };
 
-// Updated Delete Video (Soft Delete)
-export const deleteVideo = (req: Request, res: Response): void => {
-  VideoModel.findById(req.params.id)
-    .then((video) => {
-      if (!video) {
-        res.status(404).json({ message: "Video not found" });
-        return;
-      }
+// ✅ DELETE VIDEO and move to Recycle Bin
+export const deleteVideo = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const video = await VideoModel.findById(req.params.id);
+    if (!video) {
+      res.status(404).json({ message: "Video not found" });
+      return;
+    }
 
-      const recycleEntry = new RecycleBinModel({
-        originalVideoId: video._id,
-        courseName: video.courseName,
-        courseContent: video.courseContent,
-        videoUrl: video.videoUrl,
-        thumbnailUrl: video.thumbnailUrl,
-        description: video.description, 
-        status: video.status,
-        uploadedBy: video.uploadedBy,
-        deletedAt: new Date(),
-      });
-
-      recycleEntry.save().then(() => {
-        return VideoModel.findByIdAndDelete(video._id);
-      })
-      .then(() => {
-        res.status(200).json({ message: "Video moved to Recycle Bin successfully" });
-      })
-      .catch((error) => {
-        res.status(500).json({ message: "Error while deleting video", error: error.message });
-      });
-    })
-    .catch((error) => {
-      res.status(500).json({ message: error.message });
+    // Create recycle bin entry
+    const recycleEntry = new RecycleBinModel({
+      originalVideoId: video._id,               // <-- original video ID saved
+      courseName: video.courseName,
+      courseContent: video.courseContent,
+      videoUrl: video.videoUrl,
+      thumbnailUrl: video.thumbnailUrl,
+      description: video.description,
+      status: video.status,
+      uploadedBy: video.uploadedBy,
+      deletedAt: new Date(),
     });
+
+    await recycleEntry.save();                  // Save recycle entry
+    await VideoModel.findByIdAndDelete(video._id);  // Delete original video
+
+    res.status(200).json({ message: "Video moved to Recycle Bin successfully" });
+  } catch (error: any) {
+    console.error("Error in deleteVideo:", error.message);
+    res.status(500).json({ message: "Error while deleting video", error: error.message });
+  }
 };
 
 // Get Instructor Profile

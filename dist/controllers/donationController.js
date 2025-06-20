@@ -18,7 +18,7 @@ const createCheckoutSession = (req, res) => {
         res.status(400).json({ message: 'User ID is required but not found in request' });
         return Promise.resolve();
     }
-    const { donationAmount, isAnonymous, donationType, message } = req.body;
+    const { donationAmount, isAnonymous, donerName, donationType, message } = req.body;
     if (!donationAmount || donationAmount <= 0) {
         res.status(400).json({ message: 'Invalid donation amount!' });
         return Promise.resolve();
@@ -29,6 +29,7 @@ const createCheckoutSession = (req, res) => {
         status: 'pending',
         isAnonymous: isAnonymous || false,
         donationType: donationType || 'one-time',
+        donerName: isAnonymous ? 'Anonymous' : donerName || 'Unknown Donor',
         message: message || '',
         paymentId: '',
     });
@@ -111,7 +112,7 @@ const stripeWebhook = (req, res) => {
         Donation_1.default.findOne({ paymentId: session.id })
             .then((donation) => {
             if (!donation) {
-                console.error(" Donation not found for paymentId:", session.id);
+                console.error("Donation not found for paymentId:", session.id);
                 if (!res.headersSent)
                     res.status(404).json({ message: "Donation not found" });
                 return;
@@ -129,7 +130,7 @@ const stripeWebhook = (req, res) => {
                 res.status(200).send("✅ Donation completed successfully");
         })
             .catch((error) => {
-            console.error(" Error handling event:", error);
+            console.error("Error handling event:", error);
             if (!res.headersSent)
                 res.status(500).json({ message: "Internal Server Error" });
         });

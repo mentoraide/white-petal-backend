@@ -120,7 +120,6 @@ const register = (req: Request, res: Response): void => {
     });
 };
 
-
 // Login User
 const login = (
   req: Request,
@@ -150,8 +149,7 @@ const login = (
       }
 
       if (
-        (updatedUser.role === "instructor" ||
-          updatedUser.role === "school") &&
+        (updatedUser.role === "instructor" || updatedUser.role === "school") &&
         updatedUser.approved !== true
       ) {
         res.status(ResponseCode.FORBIDDEN).json({
@@ -197,9 +195,9 @@ const login = (
     });
 };
 
-
 // Forgot Password
 const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  console.log(req.body);
   const { email } = req.body;
   try {
     const user = await UserModel.findOne({ email });
@@ -211,16 +209,18 @@ const forgotPassword = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Generate reset token
     const resetToken = crypto.randomBytes(32).toString("hex");
-    const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
-    
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
     user.resetPasswordToken = hashedToken;
-    user.resetPasswordExpires = Date.now() + 3600000; // Store as number for compatibility
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
     await user.save({ validateBeforeSave: false });
 
-    // console.log("Reset Token:", resetToken); // Debugging
-    // console.log("Hashed Token:", hashedToken);
-
+    // Create email transporter
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),
@@ -231,25 +231,36 @@ const forgotPassword = async (req: Request, res: Response): Promise<void> => {
       },
     });
 
+    const resetLink = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+
     const mailOptions = {
-      from: process.env.SMTP_MAIL,
+      from: `"Your App Name" <${process.env.SMTP_MAIL}>`,
       to: user.email,
-      subject: "Password Reset Request",
-      text: `You requested a password reset. Click the link to reset: ${process.env.CLIENT_URL}/reset-password/${resetToken}`,
+      subject: "Reset Your Password",
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+          <h2>Password Reset Request</h2>
+          <p>Hello ${user.name || "User"},</p>
+          <p>You requested to reset your password. Click the button below to proceed:</p>
+          <a href="${resetLink}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px;">Reset Password</a>
+          <p>If the button doesn't work, copy and paste this link into your browser:</p>
+          <p><a href="${resetLink}">${resetLink}</a></p>
+          <p>This link will expire in 1 hour.</p>
+        </div>
+      `,
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    // console.log("Email sent: ", info.response);
+    await transporter.sendMail(mailOptions);
 
     res.status(ResponseCode.SUCCESS).json({
       status: true,
       message: "Password reset link sent to your email.",
     });
   } catch (error) {
-    console.error("Error in forgotPassword:", error); // Debugging
+    console.error("Error in forgotPassword:", error);
     res.status(ResponseCode.SERVER_ERROR).json({
       status: false,
-      message: "Server error",
+      message: "Something went wrong while sending reset email",
     });
   }
 };
@@ -302,7 +313,6 @@ const resetPassword = async (req: Request, res: Response): Promise<void> => {
     });
   }
 };
-
 
 const approveUser = (req: AuthRequest, res: Response): void => {
   if (req.user?.role === "school") {
@@ -363,7 +373,6 @@ const approveUser = (req: AuthRequest, res: Response): void => {
       }
     });
 };
-
 
 //  Reject User (Admin Only)
 const rejectUserbyAdmin = (req: AuthRequest, res: Response): void => {
@@ -519,12 +528,20 @@ const createUserByAdmin = (req: AuthRequest, res: Response): void => {
     return;
   }
 
-  const { name, email, role } = req.body;
+  const { name, email, role, password } = req.body;
 
   if (role !== "instructor" && role !== "school") {
     res.status(ResponseCode.BAD_REQUEST).json({
       status: false,
       message: "Invalid role. Only 'instructor' or 'school' allowed",
+    });
+    return;
+  }
+
+  if (!password || password.length < 6) {
+    res.status(ResponseCode.BAD_REQUEST).json({
+      status: false,
+      message: "Password is required and must be at least 6 characters",
     });
     return;
   }
@@ -538,13 +555,13 @@ const createUserByAdmin = (req: AuthRequest, res: Response): void => {
         return Promise.reject("Email already exists");
       }
 
-      const hashedPassword = bcrypt.hashSync(req.body.password || email, 10);
+      const hashedPassword = bcrypt.hashSync(password, 10);
       const user = new UserModel({
         name,
         email,
         password: hashedPassword,
         role,
-        approved: true, // ✅ Auto-approve when created by admin
+        approved: true,
       });
 
       return user.save();
@@ -555,7 +572,6 @@ const createUserByAdmin = (req: AuthRequest, res: Response): void => {
         message: "User created successfully",
         user: {
           id: user._id,
-          _id: user._id,
           name: user.name,
           email: user.email,
           role: user.role,
@@ -613,76 +629,59 @@ const getUserProfile = (req: AuthRequest, res: Response<Res<IUser>>): void => {
 };
 
 // Update user profile
-const updateUserProfile = (req: AuthRequest, res: Response): void => {
+export const updateUserProfile = (req: AuthRequest, res: Response): void => {
   if (!req.user) {
-    res
-      .status(ResponseCode.UNAUTHORIZED)
-      .json({ status: false, message: "User is not authenticated" });
+    res.status(ResponseCode.UNAUTHORIZED).json({
+      status: false,
+      message: "User is not authenticated",
+    });
     return;
   }
 
-
-  const { name, email } = req.body;
+  const { name, email, address, phone } = req.body;
   const userId = req.params.userId;
-  if (req.user.role === "admin") {
-    let updateData: any = { name, email };
 
-    if (req.file) {
-      cloudinary.uploader
-        .upload(req.file.path, { folder: "profiles" })
-        .then((cloudinaryRes) => {
-          updateData.profileImage = cloudinaryRes.secure_url;
-          UserModel.findByIdAndUpdate(userId, updateData, { new: true })
-            .select("-password -token -__v")
-            .then((updatedUser) => {
-              if (updatedUser) {
-                res.status(ResponseCode.SUCCESS).json({
-                  status: true,
-                  data: updatedUser,
-                  message: "Profile updated successfully",
-                });
-              } else {
-                res
-                  .status(ResponseCode.NOT_FOUND_ERROR)
-                  .json({ status: false, message: "User not found" });
-              }
-            })
-            .catch(() => {
-              res.status(ResponseCode.SERVER_ERROR).json({
-                status: false,
-                message: "Error updating user profile",
-              });
-            });
-        })
-        .catch(() => {
-          res
-            .status(ResponseCode.SERVER_ERROR)
-            .json({ status: false, message: "Error uploading image" });
+  const updateData: any = { name, email, address, phone };
+
+  // Admin can update any user
+  if (req.user.role === "admin") {
+    UserModel.findByIdAndUpdate(userId, updateData, { new: true })
+      .select("-password -token -__v")
+      .then((updatedUser) => {
+        if (updatedUser) {
+          // Custom order of fields in response
+          const formattedUser = {
+            _id: updatedUser._id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            address: updatedUser.address,
+            phone: updatedUser.phone,
+            role: updatedUser.role,
+            approved: updatedUser.approved,
+            createdAt: updatedUser.createdOn,
+            updatedAt: updatedUser.updatedOn,
+          };
+
+          res.status(ResponseCode.SUCCESS).json({
+            status: true,
+            data: formattedUser,
+            message: "Profile updated successfully",
+          });
+        } else {
+          res.status(ResponseCode.NOT_FOUND_ERROR).json({
+            status: false,
+            message: "User not found",
+          });
+        }
+      })
+      .catch(() => {
+        res.status(ResponseCode.SERVER_ERROR).json({
+          status: false,
+          message: "Error updating user profile",
         });
-    } else {
-      UserModel.findByIdAndUpdate(userId, updateData, { new: true })
-        .select("-password -token -__v")
-        .then((updatedUser) => {
-          if (updatedUser) {
-            res.status(ResponseCode.SUCCESS).json({
-              status: true,
-              data: updatedUser,
-              message: "Profile updated successfully",
-            });
-          } else {
-            res
-              .status(ResponseCode.NOT_FOUND_ERROR)
-              .json({ status: false, message: "User not found" });
-          }
-        })
-        .catch(() => {
-          res
-            .status(ResponseCode.SERVER_ERROR)
-            .json({ status: false, message: "Server error" });
-        });
-    }
+      });
   } else {
-    // Non-admin users (Instructors, Schools) can only update their own profile
+    // Non-admin can only update their own profile
     if (userId !== req.user.id.toString()) {
       res.status(ResponseCode.FORBIDDEN).json({
         status: false,
@@ -691,65 +690,43 @@ const updateUserProfile = (req: AuthRequest, res: Response): void => {
       return;
     }
 
-    let updateData: any = { name, email };
+    UserModel.findByIdAndUpdate(userId, updateData, { new: true })
+      .select("-password -token -__v")
+      .then((updatedUser) => {
+        if (updatedUser) {
+          // Custom order of fields in response
+          const formattedUser = {
+            _id: updatedUser._id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            address: updatedUser.address,
+            phone: updatedUser.phone,
+            role: updatedUser.role,
+            approved: updatedUser.approved,
+            createdAt: updatedUser.createdOn,
+            updatedAt: updatedUser.updatedOn,
+          };
 
-    if (req.file) {
-      cloudinary.uploader
-        .upload(req.file.path, { folder: "profiles" })
-        .then((cloudinaryRes) => {
-          updateData.profileImage = cloudinaryRes.secure_url;
-          UserModel.findByIdAndUpdate(userId, updateData, { new: true })
-            .select("-password -token -__v")
-            .then((updatedUser) => {
-              if (updatedUser) {
-                res.status(ResponseCode.SUCCESS).json({
-                  status: true,
-                  data: updatedUser,
-                  message: "Profile updated successfully",
-                });
-              } else {
-                res
-                  .status(ResponseCode.NOT_FOUND_ERROR)
-                  .json({ status: false, message: "User not found" });
-              }
-            })
-            .catch(() => {
-              res.status(ResponseCode.SERVER_ERROR).json({
-                status: false,
-                message: "Error updating user profile",
-              });
-            });
-        })
-        .catch(() => {
-          res
-            .status(ResponseCode.SERVER_ERROR)
-            .json({ status: false, message: "Error uploading image" });
+          res.status(ResponseCode.SUCCESS).json({
+            status: true,
+            data: formattedUser,
+            message: "Profile updated successfully",
+          });
+        } else {
+          res.status(ResponseCode.NOT_FOUND_ERROR).json({
+            status: false,
+            message: "User not found",
+          });
+        }
+      })
+      .catch(() => {
+        res.status(ResponseCode.SERVER_ERROR).json({
+          status: false,
+          message: "Server error",
         });
-    } else {
-      // Update profile without image
-      UserModel.findByIdAndUpdate(userId, updateData, { new: true })
-        .select("-password -token -__v")
-        .then((updatedUser) => {
-          if (updatedUser) {
-            res.status(ResponseCode.SUCCESS).json({
-              status: true,
-              data: updatedUser,
-              message: "Profile updated successfully",
-            });
-          } else {
-            res
-              .status(ResponseCode.NOT_FOUND_ERROR)
-              .json({ status: false, message: "User not found" });
-          }
-        })
-        .catch(() => {
-          res
-            .status(ResponseCode.SERVER_ERROR)
-            .json({ status: false, message: "Server error" });
-        });
-    }
+      });
   }
-};
+}; 
 
 export default {
   register,

@@ -7,7 +7,6 @@ import {
 
 const Route: Router = Router();
 
-
 Route.put(
   "/approve/invoice/:id",
   authenticate,
@@ -22,3 +21,4 @@ Route.put(
 );
 
 export default Route;
+

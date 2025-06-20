@@ -53,6 +53,7 @@ const InvoiceSchema = new Schema<Invoice>({
     date: { type: Date, required: true, default: Date.now },
     dueDate: { type: Date, required: true },
     instructor: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    
     instructorDetails: {
         name: { type: String, required: true },
         email: { type: String, required: true },

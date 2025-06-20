@@ -20,6 +20,7 @@ import chatRoutes from "./routes/chatRoute";
 import { app, server } from "./lib/Utils/socket";
 import recycleRoutes from "./routes/recyclebinRoutes"
 import recycleLibraryRoutes from "./routes/LibraryRecycleBinRoute"
+import recycleGalleryRoutes from "./routes/GalleryRecycleBinRoutes"
 import path from "path";
 
 dotenv.config();
@@ -59,6 +60,7 @@ app.use("/api/v1/chat", chatRoutes);
 app.use("/api/v1/VideoSetting", videoSettingRoutes);
 app.use("/api/v1/recycle-bin", recycleRoutes);
 app.use("/api/v1/Libraryrecyclebin",recycleLibraryRoutes);
+app.use("/api/v1/Galleryrecyclebin",recycleGalleryRoutes);
 
 const PORT = process.env.PORT || 3000;
 
