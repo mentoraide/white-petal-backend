@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import RecycleBinModel from "../models/recycleBin";
 import VideoModel from "../models/video";
 
-// Get All Recycle Bin Videos
+
 // Get All Recycle Bin Videos
 export const getAllRecycleItems = async (
   req: Request,

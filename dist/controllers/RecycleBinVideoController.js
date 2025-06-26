@@ -16,7 +16,6 @@ exports.permanentDeleteVideo = exports.restoreVideo = exports.getAllRecycleItems
 const recycleBin_1 = __importDefault(require("../models/recycleBin"));
 const video_1 = __importDefault(require("../models/video"));
 // Get All Recycle Bin Videos
-// Get All Recycle Bin Videos
 const getAllRecycleItems = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const items = yield recycleBin_1.default.find().populate("uploadedBy", "name email");

@@ -8,8 +8,6 @@ const nodemailer_1 = __importDefault(require("nodemailer"));
 const video_1 = __importDefault(require("../models/video"));
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const user_1 = __importDefault(require("../models/user"));
-const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const transporter = nodemailer_1.default.createTransport({
@@ -29,15 +27,14 @@ const generateInvoiceNumber = (invoiceDate, sequence) => {
 const generateInvoicePDF = (invoice) => {
     return new Promise((resolve, reject) => {
         var _a, _b, _c, _d;
-        const invoicesDir = path_1.default.join(__dirname, "../../invoices");
-        if (!fs_1.default.existsSync(invoicesDir)) {
-            fs_1.default.mkdirSync(invoicesDir, { recursive: true });
-        }
-        const invoiceNumber = generateInvoiceNumber(new Date(invoice.createdAt), invoice.sequence || 1);
-        const filePath = path_1.default.join(invoicesDir, `${invoiceNumber}.pdf`);
-        const stream = fs_1.default.createWriteStream(filePath);
         const doc = new pdfkit_1.default();
-        doc.pipe(stream);
+        const buffers = [];
+        doc.on("data", buffers.push.bind(buffers));
+        doc.on("end", () => {
+            const pdfData = Buffer.concat(buffers);
+            resolve(pdfData);
+        });
+        const invoiceNumber = generateInvoiceNumber(new Date(invoice.createdAt), invoice.sequence || 1);
         // Invoice Header
         doc.fontSize(20).text("Invoice", { align: "center" });
         doc.moveDown();
@@ -55,12 +52,10 @@ const generateInvoicePDF = (invoice) => {
         doc.moveDown();
         doc.fontSize(14).text("Video Details", { underline: true });
         doc.text(`courseName: ${invoice.courseName || "N/A"}`).moveDown(0.5);
-        doc.text(`courseContent: ${invoice.courseContent || "N/A"}`).moveDown(0.5); // 0.5 line gap;
+        doc.text(`courseContent: ${invoice.courseContent || "N/A"}`).moveDown(0.5);
         doc.text(`videoUrl: ${invoice.videoUrl || "N/A"}`).moveDown(0.5);
-        // doc.text(`description: ${invoice.description || "N/A"}`).moveDown(0.5); 
         doc.text(`Uploaded Date: ${new Date(invoice.createdAt).toLocaleDateString()}`).moveDown(0.5);
-        doc.text(`Total Views: ${invoice.watchedBy ? invoice.watchedBy.length : 0}`).moveDown(0.5);
-        doc.moveDown();
+        doc.text(`Total Views: ${invoice.watchedBy ? invoice.watchedBy.length : 0}`).moveDown();
         // Approval Section
         if (invoice.status === "Approved") {
             doc.text("Status: Approved", { underline: true });
@@ -72,18 +67,15 @@ const generateInvoicePDF = (invoice) => {
             doc.text(`Rejection Reason: ${invoice.rejectionReason || "Rejected due to issues with the video and money"}`);
         }
         else {
-            // Optionally handle cases where the status is neither Approved or Rejected
             doc.text("Status: Pending", { underline: true });
         }
-        // Notes Section (with proper alignment)
+        // Notes Section
         doc.fontSize(14).text("Notes:", { underline: true });
-        doc.fontSize(12).text("[Admin Remarks]").moveDown(1); // 1 line gap
+        doc.fontSize(12).text("[Admin Remarks]").moveDown(1);
         doc.end();
-        stream.on("finish", () => resolve(filePath));
-        stream.on("error", (err) => reject(err));
     });
 };
-const sendInvoiceEmail = (email, invoicePath) => {
+const sendInvoiceEmail = (email, pdfBuffer) => {
     if (!email) {
         throw new Error("Email is required for sending invoices");
     }
@@ -92,7 +84,13 @@ const sendInvoiceEmail = (email, invoicePath) => {
         to: email,
         subject: "Your Invoice",
         text: "Please find attached your invoice.",
-        attachments: [{ filename: "invoice.pdf", path: invoicePath }],
+        attachments: [
+            {
+                filename: "invoice.pdf",
+                content: pdfBuffer,
+                contentType: "application/pdf",
+            },
+        ],
     }).catch((error) => {
         console.error("Error sending email:", error);
     });

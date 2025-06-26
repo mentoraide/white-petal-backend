@@ -572,7 +572,7 @@ const createUserByAdmin = (req, res) => {
             const mailOptions = {
                 from: process.env.SMTP_MAIL,
                 to: savedUser.email,
-                subject: "Your LMS Account Credentials",
+                subject: "Your White Petal LMS Account Credentials",
                 html: `
             <p>Hello ${savedUser.name},</p>
             <p>Your account has been created by the admin.</p>
