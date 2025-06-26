@@ -12,13 +12,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.updateUserProfile = exports.createUserByAdmin = void 0;
 const user_1 = __importDefault(require("../models/user"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const ResponseCode_1 = require("../lib/Utils/ResponseCode");
-const Cloundinary_1 = __importDefault(require("../lib/Utils/Cloundinary"));
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const crypto_1 = __importDefault(require("crypto"));
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
 const createToken = (user) => {
     var _a;
     return jsonwebtoken_1.default.sign({ id: user._id, role: user.role }, (_a = process.env.JWT_SECRET) !== null && _a !== void 0 ? _a : "", { expiresIn: "1d" });
@@ -51,8 +53,7 @@ const register = (req, res) => {
         }
         const hashedPassword = bcryptjs_1.default.hashSync(password, 10);
         const userRole = role || "user";
-        const isNormalUser = userRole === "user";
-        const user = new user_1.default({
+        const newUser = new user_1.default({
             name,
             email,
             password: hashedPassword,
@@ -61,14 +62,14 @@ const register = (req, res) => {
             phone,
             address,
             bio,
-            approved: isNormalUser ? true : false, // 👈 auto-approve only normal users
+            approved: userRole === "user" ? true : undefined, // 👈 only "user" is manually approved
         });
-        return user.save();
+        return newUser.save();
     })
         .then((user) => {
         res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
             status: true,
-            message: user.role === "user"
+            message: user.role === "user" || user.role === "admin"
                 ? "Registration successful."
                 : "Registration successful. Awaiting admin approval.",
             user: {
@@ -116,8 +117,7 @@ const login = (req, res) => {
             });
             return Promise.reject("User not found");
         }
-        if ((updatedUser.role === "instructor" ||
-            updatedUser.role === "school") &&
+        if ((updatedUser.role === "instructor" || updatedUser.role === "school") &&
             updatedUser.approved !== true) {
             res.status(ResponseCode_1.ResponseCode.FORBIDDEN).json({
                 status: false,
@@ -159,6 +159,7 @@ const login = (req, res) => {
 };
 // Forgot Password
 const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    console.log(req.body);
     const { email } = req.body;
     try {
         const user = yield user_1.default.findOne({ email });
@@ -169,13 +170,16 @@ const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function*
             });
             return;
         }
+        // Generate reset token
         const resetToken = crypto_1.default.randomBytes(32).toString("hex");
-        const hashedToken = crypto_1.default.createHash("sha256").update(resetToken).digest("hex");
+        const hashedToken = crypto_1.default
+            .createHash("sha256")
+            .update(resetToken)
+            .digest("hex");
         user.resetPasswordToken = hashedToken;
-        user.resetPasswordExpires = Date.now() + 3600000; // Store as number for compatibility
+        user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
         yield user.save({ validateBeforeSave: false });
-        // console.log("Reset Token:", resetToken); // Debugging
-        // console.log("Hashed Token:", hashedToken);
+        // Create email transporter
         const transporter = nodemailer_1.default.createTransport({
             host: process.env.SMTP_HOST,
             port: Number(process.env.SMTP_PORT),
@@ -185,24 +189,34 @@ const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function*
                 pass: process.env.SMTP_PASSWORD,
             },
         });
+        const resetLink = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
         const mailOptions = {
-            from: process.env.SMTP_MAIL,
+            from: `"Your App Name" <${process.env.SMTP_MAIL}>`,
             to: user.email,
-            subject: "Password Reset Request",
-            text: `You requested a password reset. Click the link to reset: ${process.env.CLIENT_URL}/reset-password/${resetToken}`,
+            subject: "Reset Your Password",
+            html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+          <h2>Password Reset Request</h2>
+          <p>Hello ${user.name || "User"},</p>
+          <p>You requested to reset your password. Click the button below to proceed:</p>
+          <a href="${resetLink}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px;">Reset Password</a>
+          <p>If the button doesn't work, copy and paste this link into your browser:</p>
+          <p><a href="${resetLink}">${resetLink}</a></p>
+          <p>This link will expire in 1 hour.</p>
+        </div>
+      `,
         };
-        const info = yield transporter.sendMail(mailOptions);
-        // console.log("Email sent: ", info.response);
+        yield transporter.sendMail(mailOptions);
         res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
             status: true,
             message: "Password reset link sent to your email.",
         });
     }
     catch (error) {
-        console.error("Error in forgotPassword:", error); // Debugging
+        console.error("Error in forgotPassword:", error);
         res.status(ResponseCode_1.ResponseCode.SERVER_ERROR).json({
             status: false,
-            message: "Server error",
+            message: "Something went wrong while sending reset email",
         });
     }
 });
@@ -437,56 +451,161 @@ const RejectUsers = (req, res) => {
             .json({ status: false, message: "Error deleting user" });
     });
 };
-// Admin Creates Instructor or School
+// Admin Creates Instructor, School, or Admin
+// const createUserByAdmin = (req: AuthRequest, res: Response): void => {
+//   if (req.user?.role !== "admin") {
+//     res
+//       .status(ResponseCode.FORBIDDEN)
+//       .json({ status: false, message: "Unauthorized" });
+//     return;
+//   }
+//   const { name, email, role, password } = req.body;
+//   const allowedRoles = ["instructor", "school", "admin"];
+//   if (!allowedRoles.includes(role)) {
+//     res.status(ResponseCode.BAD_REQUEST).json({
+//       status: false,
+//       message: "Invalid role. Only 'admin', 'instructor', or 'school' allowed",
+//     });
+//     return;
+//   }
+//   if (!password || password.length < 6) {
+//     res.status(ResponseCode.BAD_REQUEST).json({
+//       status: false,
+//       message: "Password is required and must be at least 6 characters",
+//     });
+//     return;
+//   }
+//   UserModel.findOne({ email })
+//     .then((existingUser) => {
+//       if (existingUser) {
+//         res
+//           .status(ResponseCode.CONFLICT)
+//           .json({ status: false, message: "Email already exists" });
+//         return Promise.reject("Email already exists");
+//       }
+//       const hashedPassword = bcrypt.hashSync(password, 10);
+//       const user = new UserModel({
+//         name,
+//         email,
+//         password: hashedPassword,
+//         role,
+//         // approved is handled by pre-save hook for 'admin'
+//       });
+//       return user.save();
+//     })
+//     .then((user) => {
+//       res.status(ResponseCode.SUCCESS).json({
+//         status: true,
+//         message: `User with role '${role}' created successfully`,
+//         user: {
+//           id: user._id,
+//           name: user.name,
+//           email: user.email,
+//           role: user.role,
+//           approved: user.approved,
+//         },
+//       });
+//     })
+//     .catch((error) => {
+//       console.error("Error creating user by admin:", error); // 👈 log exact error
+//       if (error !== "Email already exists") {
+//         res
+//           .status(ResponseCode.SERVER_ERROR)
+//           .json({ status: false, message: "Server error" });
+//       }
+//     });
+// };
+// ✅ SMTP transporter using Gmail + App Password + Port 465 (secure SSL)
+const transporter = nodemailer_1.default.createTransport({
+    host: process.env.SMTP_HOST, // smtp.gmail.com
+    port: Number(process.env.SMTP_PORT), // 465
+    secure: true, // true for port 465
+    auth: {
+        user: process.env.SMTP_MAIL,
+        pass: process.env.SMTP_PASSWORD,
+    },
+});
+// ✅ Admin creates Instructor, School, or Admin
 const createUserByAdmin = (req, res) => {
     var _a;
     if (((_a = req.user) === null || _a === void 0 ? void 0 : _a.role) !== "admin") {
-        res
-            .status(ResponseCode_1.ResponseCode.FORBIDDEN)
-            .json({ status: false, message: "Unauthorized" });
+        res.status(ResponseCode_1.ResponseCode.FORBIDDEN).json({
+            status: false,
+            message: "Unauthorized",
+        });
         return;
     }
-    const { name, email, role } = req.body;
-    if (role !== "instructor" && role !== "school") {
+    const { name, email, role, password } = req.body;
+    const allowedRoles = ["instructor", "school", "admin"];
+    if (!allowedRoles.includes(role)) {
         res.status(ResponseCode_1.ResponseCode.BAD_REQUEST).json({
             status: false,
-            message: "Invalid role. Only 'instructor' or 'school' allowed",
+            message: "Invalid role. Only 'admin', 'instructor', or 'school' allowed",
+        });
+        return;
+    }
+    if (!password || password.length < 6) {
+        res.status(ResponseCode_1.ResponseCode.BAD_REQUEST).json({
+            status: false,
+            message: "Password is required and must be at least 6 characters",
         });
         return;
     }
     user_1.default.findOne({ email })
         .then((existingUser) => {
         if (existingUser) {
-            res
-                .status(ResponseCode_1.ResponseCode.CONFLICT)
-                .json({ status: false, message: "Email already exists" });
+            res.status(ResponseCode_1.ResponseCode.CONFLICT).json({
+                status: false,
+                message: "Email already exists",
+            });
             return Promise.reject("Email already exists");
         }
-        const hashedPassword = bcryptjs_1.default.hashSync(req.body.password || email, 10);
+        const hashedPassword = bcryptjs_1.default.hashSync(password, 10);
         const user = new user_1.default({
             name,
             email,
             password: hashedPassword,
             role,
-            approved: true, // ✅ Auto-approve when created by admin
         });
-        return user.save();
-    })
-        .then((user) => {
-        res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
-            status: true,
-            message: "User created successfully",
-            user: {
-                id: user._id,
-                _id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                approved: user.approved,
-            },
+        return user.save().then((savedUser) => {
+            // ✅ Send credentials via email
+            const mailOptions = {
+                from: process.env.SMTP_MAIL,
+                to: savedUser.email,
+                subject: "Your White Petal LMS Account Credentials",
+                html: `
+            <p>Hello ${savedUser.name},</p>
+            <p>Your account has been created by the admin.</p>
+            <p><strong>Email:</strong> ${savedUser.email}</p>
+            <p><strong>Password:</strong> ${password}</p>
+            <p><strong>Role:</strong> ${savedUser.role}</p>
+            <br/>
+            <p>You can now login to the platform.</p>
+          `,
+            };
+            transporter.sendMail(mailOptions, (err, info) => {
+                if (err) {
+                    // console.error("Email sending failed:", err);
+                }
+                else {
+                    // console.log("Email sent:", info.response);
+                }
+            });
+            res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
+                status: true,
+                message: `User with role '${role}' created successfully. Credentials sent to email.`,
+                user: {
+                    id: savedUser._id,
+                    name: savedUser.name,
+                    email: savedUser.email,
+                    role: savedUser.role,
+                    approved: savedUser.approved,
+                },
+            });
         });
     })
         .catch((error) => {
+        console.error("Error creating user by admin:", error);
         if (error !== "Email already exists") {
             res
                 .status(ResponseCode_1.ResponseCode.SERVER_ERROR)
@@ -494,6 +613,7 @@ const createUserByAdmin = (req, res) => {
         }
     });
 };
+exports.createUserByAdmin = createUserByAdmin;
 //Logout Controller
 const logout = (req, res) => {
     res.clearCookie("token");
@@ -531,75 +651,55 @@ const getUserProfile = (req, res) => {
 // Update user profile
 const updateUserProfile = (req, res) => {
     if (!req.user) {
-        res
-            .status(ResponseCode_1.ResponseCode.UNAUTHORIZED)
-            .json({ status: false, message: "User is not authenticated" });
+        res.status(ResponseCode_1.ResponseCode.UNAUTHORIZED).json({
+            status: false,
+            message: "User is not authenticated",
+        });
         return;
     }
-    const { name, email } = req.body;
+    const { name, email, address, phone } = req.body;
     const userId = req.params.userId;
+    const updateData = { name, email, address, phone };
+    // Admin can update any user
     if (req.user.role === "admin") {
-        let updateData = { name, email };
-        if (req.file) {
-            Cloundinary_1.default.uploader
-                .upload(req.file.path, { folder: "profiles" })
-                .then((cloudinaryRes) => {
-                updateData.profileImage = cloudinaryRes.secure_url;
-                user_1.default.findByIdAndUpdate(userId, updateData, { new: true })
-                    .select("-password -token -__v")
-                    .then((updatedUser) => {
-                    if (updatedUser) {
-                        res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
-                            status: true,
-                            data: updatedUser,
-                            message: "Profile updated successfully",
-                        });
-                    }
-                    else {
-                        res
-                            .status(ResponseCode_1.ResponseCode.NOT_FOUND_ERROR)
-                            .json({ status: false, message: "User not found" });
-                    }
-                })
-                    .catch(() => {
-                    res.status(ResponseCode_1.ResponseCode.SERVER_ERROR).json({
-                        status: false,
-                        message: "Error updating user profile",
-                    });
+        user_1.default.findByIdAndUpdate(userId, updateData, { new: true })
+            .select("-password -token -__v")
+            .then((updatedUser) => {
+            if (updatedUser) {
+                // Custom order of fields in response
+                const formattedUser = {
+                    _id: updatedUser._id,
+                    name: updatedUser.name,
+                    email: updatedUser.email,
+                    address: updatedUser.address,
+                    phone: updatedUser.phone,
+                    role: updatedUser.role,
+                    approved: updatedUser.approved,
+                    createdAt: updatedUser.createdOn,
+                    updatedAt: updatedUser.updatedOn,
+                };
+                res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
+                    status: true,
+                    data: formattedUser,
+                    message: "Profile updated successfully",
                 });
-            })
-                .catch(() => {
-                res
-                    .status(ResponseCode_1.ResponseCode.SERVER_ERROR)
-                    .json({ status: false, message: "Error uploading image" });
+            }
+            else {
+                res.status(ResponseCode_1.ResponseCode.NOT_FOUND_ERROR).json({
+                    status: false,
+                    message: "User not found",
+                });
+            }
+        })
+            .catch(() => {
+            res.status(ResponseCode_1.ResponseCode.SERVER_ERROR).json({
+                status: false,
+                message: "Error updating user profile",
             });
-        }
-        else {
-            user_1.default.findByIdAndUpdate(userId, updateData, { new: true })
-                .select("-password -token -__v")
-                .then((updatedUser) => {
-                if (updatedUser) {
-                    res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
-                        status: true,
-                        data: updatedUser,
-                        message: "Profile updated successfully",
-                    });
-                }
-                else {
-                    res
-                        .status(ResponseCode_1.ResponseCode.NOT_FOUND_ERROR)
-                        .json({ status: false, message: "User not found" });
-                }
-            })
-                .catch(() => {
-                res
-                    .status(ResponseCode_1.ResponseCode.SERVER_ERROR)
-                    .json({ status: false, message: "Server error" });
-            });
-        }
+        });
     }
     else {
-        // Non-admin users (Instructors, Schools) can only update their own profile
+        // Non-admin can only update their own profile
         if (userId !== req.user.id.toString()) {
             res.status(ResponseCode_1.ResponseCode.FORBIDDEN).json({
                 status: false,
@@ -607,67 +707,44 @@ const updateUserProfile = (req, res) => {
             });
             return;
         }
-        let updateData = { name, email };
-        if (req.file) {
-            Cloundinary_1.default.uploader
-                .upload(req.file.path, { folder: "profiles" })
-                .then((cloudinaryRes) => {
-                updateData.profileImage = cloudinaryRes.secure_url;
-                user_1.default.findByIdAndUpdate(userId, updateData, { new: true })
-                    .select("-password -token -__v")
-                    .then((updatedUser) => {
-                    if (updatedUser) {
-                        res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
-                            status: true,
-                            data: updatedUser,
-                            message: "Profile updated successfully",
-                        });
-                    }
-                    else {
-                        res
-                            .status(ResponseCode_1.ResponseCode.NOT_FOUND_ERROR)
-                            .json({ status: false, message: "User not found" });
-                    }
-                })
-                    .catch(() => {
-                    res.status(ResponseCode_1.ResponseCode.SERVER_ERROR).json({
-                        status: false,
-                        message: "Error updating user profile",
-                    });
+        user_1.default.findByIdAndUpdate(userId, updateData, { new: true })
+            .select("-password -token -__v")
+            .then((updatedUser) => {
+            if (updatedUser) {
+                // Custom order of fields in response
+                const formattedUser = {
+                    _id: updatedUser._id,
+                    name: updatedUser.name,
+                    email: updatedUser.email,
+                    address: updatedUser.address,
+                    phone: updatedUser.phone,
+                    role: updatedUser.role,
+                    approved: updatedUser.approved,
+                    createdAt: updatedUser.createdOn,
+                    updatedAt: updatedUser.updatedOn,
+                };
+                res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
+                    status: true,
+                    data: formattedUser,
+                    message: "Profile updated successfully",
                 });
-            })
-                .catch(() => {
-                res
-                    .status(ResponseCode_1.ResponseCode.SERVER_ERROR)
-                    .json({ status: false, message: "Error uploading image" });
+            }
+            else {
+                res.status(ResponseCode_1.ResponseCode.NOT_FOUND_ERROR).json({
+                    status: false,
+                    message: "User not found",
+                });
+            }
+        })
+            .catch(() => {
+            res.status(ResponseCode_1.ResponseCode.SERVER_ERROR).json({
+                status: false,
+                message: "Server error",
             });
-        }
-        else {
-            // Update profile without image
-            user_1.default.findByIdAndUpdate(userId, updateData, { new: true })
-                .select("-password -token -__v")
-                .then((updatedUser) => {
-                if (updatedUser) {
-                    res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
-                        status: true,
-                        data: updatedUser,
-                        message: "Profile updated successfully",
-                    });
-                }
-                else {
-                    res
-                        .status(ResponseCode_1.ResponseCode.NOT_FOUND_ERROR)
-                        .json({ status: false, message: "User not found" });
-                }
-            })
-                .catch(() => {
-                res
-                    .status(ResponseCode_1.ResponseCode.SERVER_ERROR)
-                    .json({ status: false, message: "Server error" });
-            });
-        }
+        });
     }
 };
+exports.updateUserProfile = updateUserProfile;
 exports.default = {
     register,
     login,
@@ -679,7 +756,7 @@ exports.default = {
     getApprovedUsers,
     getPendingUsers,
     RejectUsers,
-    createUserByAdmin,
+    createUserByAdmin: exports.createUserByAdmin,
     logout,
-    updateUserProfile,
+    updateUserProfile: exports.updateUserProfile,
 };

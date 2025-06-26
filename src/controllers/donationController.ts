@@ -7,6 +7,7 @@ export interface AuthRequest extends Request {
   id: string; 
 }
 
+
 declare global {
   namespace Express {
     interface Request {
@@ -24,6 +25,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-01-27.acacia',
 });
 
+
 export const createCheckoutSession = (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?._id; 
 
@@ -32,7 +34,7 @@ export const createCheckoutSession = (req: AuthRequest, res: Response): Promise<
     return Promise.resolve();
   }
 
-  const { donationAmount, isAnonymous,donerName, donationType, message } = req.body;
+  const { donationAmount, isAnonymous, donerName, donationType, message } = req.body;
 
   if (!donationAmount || donationAmount <= 0) {
     res.status(400).json({ message: 'Invalid donation amount!' });
@@ -45,10 +47,11 @@ export const createCheckoutSession = (req: AuthRequest, res: Response): Promise<
     status: 'pending',
     isAnonymous: isAnonymous || false,
     donationType: donationType || 'one-time',
-    donerName:donerName,
+    donerName: isAnonymous ? 'Anonymous' : donerName || 'Unknown Donor',
     message: message || '',
     paymentId: '',
   });
+  
 
   return stripe.checkout.sessions.create({
     payment_method_types: ['card'],
@@ -101,7 +104,6 @@ export const createCheckoutSession = (req: AuthRequest, res: Response): Promise<
     });
 };
 
-
 // Stripe webhook to handle payment success or failure
 export const stripeWebhook = (req: Request, res: Response): Promise<void> => {
   let event;
@@ -133,7 +135,7 @@ export const stripeWebhook = (req: Request, res: Response): Promise<void> => {
     Donation.findOne({ paymentId: session.id })
       .then((donation) => {
         if (!donation) {
-          console.error(" Donation not found for paymentId:", session.id);
+          console.error("Donation not found for paymentId:", session.id);
           if (!res.headersSent) res.status(404).json({ message: "Donation not found" });
           return;
         }
@@ -155,7 +157,7 @@ export const stripeWebhook = (req: Request, res: Response): Promise<void> => {
         if (!res.headersSent) res.status(200).send("✅ Donation completed successfully");
       })
       .catch((error) => {
-        console.error(" Error handling event:", error);
+        console.error("Error handling event:", error);
         if (!res.headersSent) res.status(500).json({ message: "Internal Server Error" });
       });
   }
@@ -163,7 +165,6 @@ export const stripeWebhook = (req: Request, res: Response): Promise<void> => {
   if (!res.headersSent) res.status(200).send();
   return Promise.resolve(); 
 };
-
 
 // Route to get donation details by donationId
 export const getDonationDetailsbyId = (req: AuthRequest, res: Response): Promise<void> => {
@@ -192,7 +193,6 @@ export const getDonationDetailsbyId = (req: AuthRequest, res: Response): Promise
       return Promise.resolve(); 
     });
 };
-
 
 // Route to get all completed donations
 export const getAllDonations = (_: Request, res: Response): Promise<void> => {

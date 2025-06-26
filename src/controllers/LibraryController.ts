@@ -181,41 +181,34 @@ export const getAllLibraryVideo = (req: Request, res: Response): Promise<void> =
 //   return Promise.resolve();
 // };
 
-export const deleteLibraryVideo = (req: Request, res: Response): void => {
-  LibraryVideo.findById(req.params.id)
-    .then((video) => {
-      if (!video) {
-        res.status(404).json({ message: "Library video not found" });
-        return;
-      }
+export const deleteLibraryVideo = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const video = await LibraryVideo.findById(req.params.id);
+    if (!video) {
+      res.status(404).json({ message: "Library video not found" });
+      return;
+    }
 
-      const recycleEntry = new LibraryRecycleBinModel({
-        originalVideoId: video._id,
-        title: video.title,
-        author: video.author,
-        subject: video.subject,
-        keywords: video.keywords,
-        videoUrl: video.videoUrl,  // Ensure this field is populated
-        coverImage: video.coverImage,
-        description: video.description,
-        uploadedBy: video.uploadedBy,
-        deletedAt: new Date(),
-      });
-
-      recycleEntry
-        .save()
-        .then(() => {
-          return LibraryVideo.findByIdAndDelete(video._id);
-        })
-        .then(() => {
-          res.status(200).json({ message: "Library video moved to Recycle Bin successfully" });
-        })
-        .catch((error) => {
-          res.status(500).json({ message: "Error while deleting library video", error: error.message });
-        });
-    })
-    .catch((error) => {
-      res.status(500).json({ message: error.message });
+    const recycleEntry = new LibraryRecycleBinModel({
+      originalVideoId: video._id,       // Storing the deleted ID
+      title: video.title,
+      author: video.author,
+      subject: video.subject,
+      keywords: video.keywords,
+      videoUrl: video.videoUrl,
+      coverImage: video.coverImage,
+      description: video.description,
+      uploadedBy: video.uploadedBy,
+      deletedAt: new Date(),
     });
-}; 
+
+    await recycleEntry.save();               // Save to recycle bin
+    await LibraryVideo.findByIdAndDelete(video._id); // Delete original
+
+    res.status(200).json({ message: "Library video moved to Recycle Bin successfully" });
+  } catch (error: any) {
+    console.error("Error in deleteLibraryVideo:", error.message);
+    res.status(500).json({ message: "Error while deleting library video", error: error.message });
+  }
+};
 

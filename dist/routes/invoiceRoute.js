@@ -9,4 +9,5 @@ Route.get("/getInvoices", Middleware_1.authenticate, (0, Middleware_1.authorizeR
 Route.get("/getSingleInvoices/:invoiceId", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)("instructor"), invoiceController_1.getInvoiceById);
 Route.put("/updateInvoices/:invoiceId", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)("instructor"), invoiceController_1.updateInvoice);
 Route.delete("/deleteInvoices/:invoiceId", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)("instructor"), invoiceController_1.deleteInvoice);
+Route.get("/invoice/:invoiceId/pdf", Middleware_1.authenticate, (0, Middleware_1.authorizeRoles)("instructor"), invoiceController_1.getInvoicePDF);
 exports.default = Route;

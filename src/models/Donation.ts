@@ -7,7 +7,7 @@ export interface Donation extends Document {
   donationType: 'one-time' | 'monthly';
   message?: string;
   status: 'pending' | 'completed' | 'failed';
-  donerName:string,
+  donerName: string;
   paymentId: string; 
   updatedAt: Date;
 }
@@ -23,10 +23,10 @@ const DonationSchema: Schema = new Schema(
       type: Number,
       required: true,
     },
-    donerName:{
-     type:String,
+    donerName: {
+      type: String,
+      required: true,
     },
-
     isAnonymous: {
       type: Boolean,
       default: false,
@@ -45,13 +45,13 @@ const DonationSchema: Schema = new Schema(
       enum: ['pending', 'completed', 'failed'],
       default: 'pending',
     },
-  paymentId: { 
-    type: String,
-     default: ''
-     },
-     
+    paymentId: { 
+      type: String,
+      default: ''
+    },
   },
   { timestamps: true }
 );
 
 export default mongoose.model<Donation>('Donation', DonationSchema);
+

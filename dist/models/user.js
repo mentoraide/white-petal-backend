@@ -37,13 +37,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const password_hash_1 = __importDefault(require("password-hash"));
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const UserSchema = new mongoose_1.Schema({
     name: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    resetPasswordToken: { type: String }, // Added this field
-    resetPasswordExpires: { type: Number }, // Added this field
+    resetPasswordToken: { type: String },
+    resetPasswordExpires: { type: Number },
     role: {
         type: String,
         enum: ["admin", "instructor", "school", "user"],
@@ -55,17 +55,19 @@ const UserSchema = new mongoose_1.Schema({
     bio: { type: String },
     profileImage: { type: String },
     approved: { type: Boolean, default: false },
-}, { timestamps: true });
-// Pre-save hook: Auto-approve "admin" & "user"
+}, {
+    timestamps: { createdAt: "createdOn", updatedAt: "updatedOn" },
+});
+// Pre-save hook: Auto-approve admin role
 UserSchema.pre("save", function (next) {
     if (this.role === "admin") {
         this.approved = true;
     }
     next();
 });
-// Compare passwords
+// Compare passwords using bcrypt
 UserSchema.methods.comparePassword = function (candidatePassword) {
-    return password_hash_1.default.verify(candidatePassword, this.password);
+    return bcryptjs_1.default.compareSync(candidatePassword, this.password);
 };
 const UserModel = mongoose_1.default.model("User", UserSchema);
 exports.default = UserModel;

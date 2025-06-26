@@ -24,19 +24,18 @@ const generateInvoiceNumber = (invoiceDate: Date, sequence: number): string => {
     return `INV-${formattedDate}-${sequence.toString().padStart(4, "0")}`;
 };
 
-const generateInvoicePDF = (invoice: any): Promise<string> => {
+const generateInvoicePDF = (invoice: any): Promise<Buffer> => {
     return new Promise((resolve, reject) => {
-        const invoicesDir = path.join(__dirname, "../../invoices");
-        if (!fs.existsSync(invoicesDir)) {
-            fs.mkdirSync(invoicesDir, { recursive: true });
-        }
+        const doc = new PDFDocument();
+        const buffers: Buffer[] = [];
+
+        doc.on("data", buffers.push.bind(buffers));
+        doc.on("end", () => {
+            const pdfData = Buffer.concat(buffers);
+            resolve(pdfData);
+        });
 
         const invoiceNumber = generateInvoiceNumber(new Date(invoice.createdAt), invoice.sequence || 1);
-        const filePath = path.join(invoicesDir, `${invoiceNumber}.pdf`);
-        const stream = fs.createWriteStream(filePath);
-        const doc = new PDFDocument();
-
-        doc.pipe(stream);
 
         // Invoice Header
         doc.fontSize(20).text("Invoice", { align: "center" });
@@ -58,38 +57,33 @@ const generateInvoicePDF = (invoice: any): Promise<string> => {
 
         doc.fontSize(14).text("Video Details", { underline: true });
         doc.text(`courseName: ${invoice.courseName || "N/A"}`).moveDown(0.5); 
-        doc.text(`courseContent: ${invoice.courseContent || "N/A"}`).moveDown(0.5); // 0.5 line gap;
-        doc.text(`videoUrl: ${invoice.videoUrl || "N/A"}`).moveDown(0.5); 
-        // doc.text(`description: ${invoice.description || "N/A"}`).moveDown(0.5); 
-        doc.text(`Uploaded Date: ${new Date(invoice.createdAt).toLocaleDateString()}`).moveDown(0.5); 
-        doc.text(`Total Views: ${invoice.watchedBy ? invoice.watchedBy.length : 0}`).moveDown(0.5); 
-        doc.moveDown();
+        doc.text(`courseContent: ${invoice.courseContent || "N/A"}`).moveDown(0.5);
+        doc.text(`videoUrl: ${invoice.videoUrl || "N/A"}`).moveDown(0.5);
+        doc.text(`Uploaded Date: ${new Date(invoice.createdAt).toLocaleDateString()}`).moveDown(0.5);
+        doc.text(`Total Views: ${invoice.watchedBy ? invoice.watchedBy.length : 0}`).moveDown();
 
+        // Approval Section
+        if (invoice.status === "Approved") {
+            doc.text("Status: Approved", { underline: true }); 
+            doc.text(`Approval Date: ${invoice.approvalDate ? invoice.approvalDate.toLocaleDateString() : "N/A"}`);
+        } else if (invoice.status === "Rejected") {
+            doc.text("Status: Rejected", { underline: true }); 
+            doc.text(`Rejection Date: ${invoice.rejectionDate ? invoice.rejectionDate.toLocaleDateString() : "N/A"}`);
+            doc.text(`Rejection Reason: ${invoice.rejectionReason || "Rejected due to issues with the video and money"}`);
+        } else {
+            doc.text("Status: Pending", { underline: true }); 
+        }
 
-       // Approval Section
-       if (invoice.status === "Approved") {
-        doc.text("Status: Approved", { underline: true }); 
-        doc.text(`Approval Date: ${invoice.approvalDate ? invoice.approvalDate.toLocaleDateString() : "N/A"}`);
-    } else if (invoice.status === "Rejected") {
-        doc.text("Status: Rejected", { underline: true }); 
-        doc.text(`Rejection Date: ${invoice.rejectionDate ? invoice.rejectionDate.toLocaleDateString() : "N/A"}`);
-        doc.text(`Rejection Reason: ${invoice.rejectionReason || "Rejected due to issues with the video and money"}`);
-    } else {
-        // Optionally handle cases where the status is neither Approved or Rejected
-        doc.text("Status: Pending", { underline: true }); 
-    }
-
-    // Notes Section (with proper alignment)
-    doc.fontSize(14).text("Notes:", { underline: true });
-    doc.fontSize(12).text("[Admin Remarks]").moveDown(1); // 1 line gap
+        // Notes Section
+        doc.fontSize(14).text("Notes:", { underline: true });
+        doc.fontSize(12).text("[Admin Remarks]").moveDown(1); 
 
         doc.end();
-        stream.on("finish", () => resolve(filePath));
-        stream.on("error", (err) => reject(err));
     });
 };
 
-const sendInvoiceEmail = (email: string, invoicePath: string): void => {
+
+const sendInvoiceEmail = (email: string, pdfBuffer: Buffer): void => {
     if (!email) {
         throw new Error("Email is required for sending invoices");
     }
@@ -98,7 +92,13 @@ const sendInvoiceEmail = (email: string, invoicePath: string): void => {
         to: email,
         subject: "Your Invoice",
         text: "Please find attached your invoice.",
-        attachments: [{ filename: "invoice.pdf", path: invoicePath }],
+        attachments: [
+            {
+                filename: "invoice.pdf",
+                content: pdfBuffer,
+                contentType: "application/pdf",
+            },
+        ],
     }).catch((error) => {
         console.error("Error sending email:", error);
     });

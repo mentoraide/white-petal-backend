@@ -1,4 +1,13 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -6,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteLibraryVideo = exports.getAllLibraryVideo = exports.getLibraryVideoById = exports.getLibraryVideo = exports.updateLibraryVideo = exports.uploadLibraryVideo = void 0;
 const LibraryBook_1 = __importDefault(require("../models/LibraryBook"));
 const cloudinary_1 = __importDefault(require("cloudinary"));
+const LibraryVideoRecycleBinModel_1 = __importDefault(require("../models/LibraryVideoRecycleBinModel"));
 // 📌 Upload Library Video
 const uploadLibraryVideo = (req, res) => {
     var _a, _b;
@@ -155,12 +165,42 @@ const getAllLibraryVideo = (req, res) => {
 };
 exports.getAllLibraryVideo = getAllLibraryVideo;
 // ✅ Delete Library Video
-const deleteLibraryVideo = (req, res) => {
-    LibraryBook_1.default.findByIdAndDelete(req.params.id)
-        .then((deletedVideo) => deletedVideo
-        ? res.json({ message: 'Library Video deleted successfully' })
-        : res.status(404).json({ message: 'Library Video not found' }))
-        .catch((err) => res.status(500).json({ error: err.message }));
-    return Promise.resolve();
-};
+// export const deleteLibraryVideo = (req: AuthenticatedRequest, res: Response): Promise<void> => {
+//   LibraryVideo.findByIdAndDelete(req.params.id)
+//     .then((deletedVideo) =>
+//       deletedVideo
+//         ? res.json({ message: 'Library Video deleted successfully' })
+//         : res.status(404).json({ message: 'Library Video not found' })
+//     )
+//     .catch((err) => res.status(500).json({ error: err.message }));
+//   return Promise.resolve();
+// };
+const deleteLibraryVideo = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const video = yield LibraryBook_1.default.findById(req.params.id);
+        if (!video) {
+            res.status(404).json({ message: "Library video not found" });
+            return;
+        }
+        const recycleEntry = new LibraryVideoRecycleBinModel_1.default({
+            originalVideoId: video._id, // Storing the deleted ID
+            title: video.title,
+            author: video.author,
+            subject: video.subject,
+            keywords: video.keywords,
+            videoUrl: video.videoUrl,
+            coverImage: video.coverImage,
+            description: video.description,
+            uploadedBy: video.uploadedBy,
+            deletedAt: new Date(),
+        });
+        yield recycleEntry.save(); // Save to recycle bin
+        yield LibraryBook_1.default.findByIdAndDelete(video._id); // Delete original
+        res.status(200).json({ message: "Library video moved to Recycle Bin successfully" });
+    }
+    catch (error) {
+        console.error("Error in deleteLibraryVideo:", error.message);
+        res.status(500).json({ message: "Error while deleting library video", error: error.message });
+    }
+});
 exports.deleteLibraryVideo = deleteLibraryVideo;

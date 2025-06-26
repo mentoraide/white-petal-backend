@@ -4,7 +4,12 @@ import { IUser } from "../models/user";
 import PDFDocument from "pdfkit";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
-import VideoModel from "../models/video";
+import VideoModel from "../models/video"; 
+import { Readable } from "stream";
+import cloudinary from "../lib/Utils/Cloundinary";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+import s3 from "../lib/Utils/s3";
+import { v4 as uuidv4 } from "uuid";
 
 dotenv.config();
 
@@ -90,6 +95,21 @@ const generateInvoicePDF = (invoice: any): Promise<Buffer> => {
     });
 };
 
+const uploadInvoiceToS3 = async (buffer: Buffer, fileName: string): Promise<string> => {
+    const key = `invoices/${Date.now()}-${uuidv4()}-${fileName}`;
+
+    const command = new PutObjectCommand({
+        Bucket: process.env.AWS_S3_BUCKET_NAME!,
+        Key: key,
+        Body: buffer,
+        ContentType: "application/pdf",
+    });
+
+    await s3.send(command);
+
+    return `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+};
+
 export const createInvoice = async (req: AuthRequest, res: Response): Promise<void> => {
     if (!req.user || !req.user._id) {
         res.status(401).json({ message: "Unauthorized: User not found in request" });
@@ -97,7 +117,6 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
     }
 
     const {
-        invoiceNumber,
         dueDate,
         instructorDetails,
         companyDetails,
@@ -114,11 +133,9 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
         videoIds,
     } = req.body;
 
-    if (
-        !dueDate || !instructorDetails || !companyDetails || !services ||
+    if (!dueDate || !instructorDetails || !companyDetails || !services ||
         subTotal === undefined || taxRate === undefined || taxAmount === undefined ||
-        grandTotal === undefined || !email || !paymentDetails || !status || !videoIds
-    ) {
+        grandTotal === undefined || !email || !paymentDetails || !status || !videoIds) {
         res.status(400).json({ message: "All required fields must be provided" });
         return;
     }
@@ -150,23 +167,41 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
             videoIds,
         }).save();
 
-        // 📄 Generate invoice PDF in memory
         const pdfBuffer = await generateInvoicePDF(invoice);
 
-        // 📧 Send email with PDF attachment (buffer)
+        // Upload to S3
+        const s3Key = `invoices/invoice-${invoice.invoiceNumber}.pdf`;
+        const invoiceUrl = await uploadInvoiceToS3(pdfBuffer, s3Key);
+
+        invoice.pdfUrl = invoiceUrl;
+        await invoice.save();
+
+        // Send Invoice Email
         const mailOptions = {
             from: process.env.SMTP_MAIL,
             to: invoice.email,
             subject: "Invoice Generated",
-            text: "Please find your invoice attached.",
-            attachments: [{ filename: "invoice.pdf", content: pdfBuffer }],
+            html: `
+                <p>Your invoice is ready.</p>
+                <p><a href="${invoiceUrl}" download target="_blank">Download Invoice PDF</a></p>
+            `,
+            attachments: [
+                {
+                    filename: `invoice-${invoice.invoiceNumber}.pdf`,
+                    content: pdfBuffer,
+                },
+            ],
         };
 
         transporter.sendMail(mailOptions, (err) => {
             if (err) {
                 res.status(500).json({ message: "Invoice created but email not sent", error: err.message });
             } else {
-                res.status(201).json({ message: "Invoice created and email sent successfully", invoice });
+                res.status(201).json({
+                    message: "Invoice created, email sent, uploaded to S3",
+                    invoice,
+                    invoiceUrl,
+                });
             }
         });
     } catch (error) {
@@ -174,7 +209,6 @@ export const createInvoice = async (req: AuthRequest, res: Response): Promise<vo
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
-
 
 export const getInvoiceById = (req: AuthRequest, res: Response): void => {
     InvoiceModel.findById(req.params.invoiceId)
@@ -216,4 +250,28 @@ export const deleteInvoice = (req: AuthRequest, res: Response): void => {
             res.status(200).json({ message: "Invoice deleted successfully" });
         })
         .catch((error) => res.status(400).json({ message: error.message }));
-}
+};
+
+// ✅ New function to generate & serve PDF for download
+export const getInvoicePDF = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const invoice = await InvoiceModel.findById(req.params.invoiceId);
+        if (!invoice) {
+            res.status(404).json({ message: "Invoice not found" });
+            return;
+        }
+
+        const pdfBuffer = await generateInvoicePDF(invoice);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename=invoice-${invoice.invoiceNumber}.pdf`,
+            'Content-Length': pdfBuffer.length,
+        });
+
+        res.send(pdfBuffer);
+    } catch (error) {
+        console.error("Error generating invoice PDF:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+};

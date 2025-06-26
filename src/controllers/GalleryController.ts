@@ -1,44 +1,18 @@
 import { Response } from "express";
 import { AuthRequest } from "../lib/Utils/Middleware";
-import cloudinary from "../lib/Utils/Cloundinary";
 import Gallery from "../models/Gallery";
+import GalleryRecycleBin from "../models/GalleryRecyclebin";
 import fs from "fs";
 
-/**
- * Upload Image (Now accepts image URL)
- */
-// export const uploadImage = (req: AuthRequest, res: Response): void => {
-//   const { imageUrl, title, schoolName } = req.body;
-
-//   if (!imageUrl || !title || !schoolName) {
-//     res
-//       .status(400)
-//       .json({ message: "Image URL, title, and school name are required." });
-//   }
-
-//   if (!req.user || !req.user.id) {
-//     res.status(403).json({ message: "Unauthorized: User must be logged in." });
-//   }
-
-//   Gallery.create({
-//     imageUrl,
-//     title,
-//     schoolName,
-//     uploadedBy: req.user!.id,
-//   })
-//     .then((image) =>
-//       res.status(201).json({ message: "Image uploaded successfully.", image })
-//     )
-//     .catch((err) =>
-//       res.status(500).json({ message: "Upload failed.", error: err })
-//     );
-// };
+interface MulterS3File extends Express.Multer.File {
+  location: string;
+  key: string;
+  bucket: string;
+}
 
 export const uploadImage = (req: AuthRequest, res: Response) => {
   if (!req.file || !req.body.title || !req.body.schoolName) {
-    res
-      .status(400)
-      .json({ message: "file, title, and schoolName are required" });
+    res.status(400).json({ message: "file, title, and schoolName are required" });
     return;
   }
 
@@ -47,23 +21,21 @@ export const uploadImage = (req: AuthRequest, res: Response) => {
     return;
   }
 
-  cloudinary.uploader
-    .upload(req.file.path)
-    .then((result) => {
-      fs.unlinkSync(req.file!.path);
-      return Gallery.create({
-        imageUrl: result.secure_url,
-        title: req.body.title,
-        schoolName: req.body.schoolName,
-        uploadedBy: req.user!.id || req.user?._id, // ✅ FIX: `req.user!._id` since we've checked `req.user` exists
-      });
-    })
-    .then((image) => res.status(201).json({ message: "Image uploaded", image }))
+  const file = req.file as MulterS3File;
+
+  Gallery.create({
+    imageUrl: file.location,
+    title: req.body.title,
+    schoolName: req.body.schoolName,
+    uploadedBy: req.user._id,
+  })
+    .then((image) =>
+      res.status(201).json({ message: "Image uploaded", image })
+    )
     .catch((err) =>
       res.status(500).json({ message: "Upload failed", error: err })
     );
 };
-
 /**
  * Approve Image - Admin only
  */
@@ -94,6 +66,7 @@ export const rejectImage = (req: AuthRequest, res: Response): void => {
       .json({ message: "Unauthorized: Only admins can reject images." });
     return;
   }
+
 
   Gallery.findByIdAndUpdate(req.params.id, { approved: false }, { new: true })
     .then((image) => {
@@ -145,15 +118,29 @@ export const updateImage = (req: AuthRequest, res: Response): void => {
 /**
  * Delete Image - Requires authentication
  */
-export const deleteImage = (req: AuthRequest, res: Response) => {
-  Gallery.findByIdAndDelete(req.params.id)
+export const deleteImage = (req: AuthRequest, res: Response): void => {
+  Gallery.findById(req.params.id)
     .then((image) => {
-      if (!image) return res.status(404).json({ message: "Image not found." });
-      res.json({ message: "Image deleted successfully." });
+      if (!image) {
+        return res.status(404).json({ message: "Image not found." });
+      }
+
+      return GalleryRecycleBin.create({
+        originalImageId: image._id,
+        imageUrl: image.imageUrl,
+        title: image.title,
+        schoolName: image.schoolName,
+        uploadedBy: image.uploadedBy,
+        approved: image.approved,
+      }).then(() =>
+        image.deleteOne().then(() =>
+          res.json({ message: "Image moved to Recycle Bin." })
+        )
+      );
     })
-    .catch((err) =>
-      res.status(500).json({ message: "Delete failed.", error: err })
-    );
+    .catch((err) => {
+      res.status(500).json({ message: "Delete failed.", error: err });
+    });
 };
 
 export const getPendingImages = (req: AuthRequest, res: Response): void => {
