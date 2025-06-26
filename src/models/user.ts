@@ -1,5 +1,5 @@
 import mongoose, { Document, Schema } from "mongoose";
-import passwordHash from "password-hash";
+import bcrypt from "bcryptjs";
 
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
@@ -46,7 +46,7 @@ const UserSchema = new Schema<IUser>(
   }
 );
 
-// Pre-save hook: Auto-approve "admin"
+// Pre-save hook: Auto-approve admin role
 UserSchema.pre<IUser>("save", function (next) {
   if (this.role === "admin") {
     this.approved = true;
@@ -54,11 +54,11 @@ UserSchema.pre<IUser>("save", function (next) {
   next();
 });
 
-// Compare passwords
+// Compare passwords using bcrypt
 UserSchema.methods.comparePassword = function (
   candidatePassword: string
 ): boolean {
-  return passwordHash.verify(candidatePassword, this.password);
+  return bcrypt.compareSync(candidatePassword, this.password);
 };
 
 const UserModel = mongoose.model<IUser>("User", UserSchema);

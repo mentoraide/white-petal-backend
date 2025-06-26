@@ -12,13 +12,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateUserProfile = void 0;
+exports.updateUserProfile = exports.createUserByAdmin = void 0;
 const user_1 = __importDefault(require("../models/user"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const ResponseCode_1 = require("../lib/Utils/ResponseCode");
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const crypto_1 = __importDefault(require("crypto"));
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
 const createToken = (user) => {
     var _a;
     return jsonwebtoken_1.default.sign({ id: user._id, role: user.role }, (_a = process.env.JWT_SECRET) !== null && _a !== void 0 ? _a : "", { expiresIn: "1d" });
@@ -51,8 +53,7 @@ const register = (req, res) => {
         }
         const hashedPassword = bcryptjs_1.default.hashSync(password, 10);
         const userRole = role || "user";
-        const isNormalUser = userRole === "user";
-        const user = new user_1.default({
+        const newUser = new user_1.default({
             name,
             email,
             password: hashedPassword,
@@ -61,14 +62,14 @@ const register = (req, res) => {
             phone,
             address,
             bio,
-            approved: isNormalUser ? true : false, // 👈 auto-approve only normal users
+            approved: userRole === "user" ? true : undefined, // 👈 only "user" is manually approved
         });
-        return user.save();
+        return newUser.save();
     })
         .then((user) => {
         res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
             status: true,
-            message: user.role === "user"
+            message: user.role === "user" || user.role === "admin"
                 ? "Registration successful."
                 : "Registration successful. Awaiting admin approval.",
             user: {
@@ -450,20 +451,96 @@ const RejectUsers = (req, res) => {
             .json({ status: false, message: "Error deleting user" });
     });
 };
-// Admin Creates Instructor or School
+// Admin Creates Instructor, School, or Admin
+// const createUserByAdmin = (req: AuthRequest, res: Response): void => {
+//   if (req.user?.role !== "admin") {
+//     res
+//       .status(ResponseCode.FORBIDDEN)
+//       .json({ status: false, message: "Unauthorized" });
+//     return;
+//   }
+//   const { name, email, role, password } = req.body;
+//   const allowedRoles = ["instructor", "school", "admin"];
+//   if (!allowedRoles.includes(role)) {
+//     res.status(ResponseCode.BAD_REQUEST).json({
+//       status: false,
+//       message: "Invalid role. Only 'admin', 'instructor', or 'school' allowed",
+//     });
+//     return;
+//   }
+//   if (!password || password.length < 6) {
+//     res.status(ResponseCode.BAD_REQUEST).json({
+//       status: false,
+//       message: "Password is required and must be at least 6 characters",
+//     });
+//     return;
+//   }
+//   UserModel.findOne({ email })
+//     .then((existingUser) => {
+//       if (existingUser) {
+//         res
+//           .status(ResponseCode.CONFLICT)
+//           .json({ status: false, message: "Email already exists" });
+//         return Promise.reject("Email already exists");
+//       }
+//       const hashedPassword = bcrypt.hashSync(password, 10);
+//       const user = new UserModel({
+//         name,
+//         email,
+//         password: hashedPassword,
+//         role,
+//         // approved is handled by pre-save hook for 'admin'
+//       });
+//       return user.save();
+//     })
+//     .then((user) => {
+//       res.status(ResponseCode.SUCCESS).json({
+//         status: true,
+//         message: `User with role '${role}' created successfully`,
+//         user: {
+//           id: user._id,
+//           name: user.name,
+//           email: user.email,
+//           role: user.role,
+//           approved: user.approved,
+//         },
+//       });
+//     })
+//     .catch((error) => {
+//       console.error("Error creating user by admin:", error); // 👈 log exact error
+//       if (error !== "Email already exists") {
+//         res
+//           .status(ResponseCode.SERVER_ERROR)
+//           .json({ status: false, message: "Server error" });
+//       }
+//     });
+// };
+// ✅ SMTP transporter using Gmail + App Password + Port 465 (secure SSL)
+const transporter = nodemailer_1.default.createTransport({
+    host: process.env.SMTP_HOST, // smtp.gmail.com
+    port: Number(process.env.SMTP_PORT), // 465
+    secure: true, // true for port 465
+    auth: {
+        user: process.env.SMTP_MAIL,
+        pass: process.env.SMTP_PASSWORD,
+    },
+});
+// ✅ Admin creates Instructor, School, or Admin
 const createUserByAdmin = (req, res) => {
     var _a;
     if (((_a = req.user) === null || _a === void 0 ? void 0 : _a.role) !== "admin") {
-        res
-            .status(ResponseCode_1.ResponseCode.FORBIDDEN)
-            .json({ status: false, message: "Unauthorized" });
+        res.status(ResponseCode_1.ResponseCode.FORBIDDEN).json({
+            status: false,
+            message: "Unauthorized",
+        });
         return;
     }
     const { name, email, role, password } = req.body;
-    if (role !== "instructor" && role !== "school") {
+    const allowedRoles = ["instructor", "school", "admin"];
+    if (!allowedRoles.includes(role)) {
         res.status(ResponseCode_1.ResponseCode.BAD_REQUEST).json({
             status: false,
-            message: "Invalid role. Only 'instructor' or 'school' allowed",
+            message: "Invalid role. Only 'admin', 'instructor', or 'school' allowed",
         });
         return;
     }
@@ -477,9 +554,10 @@ const createUserByAdmin = (req, res) => {
     user_1.default.findOne({ email })
         .then((existingUser) => {
         if (existingUser) {
-            res
-                .status(ResponseCode_1.ResponseCode.CONFLICT)
-                .json({ status: false, message: "Email already exists" });
+            res.status(ResponseCode_1.ResponseCode.CONFLICT).json({
+                status: false,
+                message: "Email already exists",
+            });
             return Promise.reject("Email already exists");
         }
         const hashedPassword = bcryptjs_1.default.hashSync(password, 10);
@@ -488,24 +566,46 @@ const createUserByAdmin = (req, res) => {
             email,
             password: hashedPassword,
             role,
-            approved: true,
         });
-        return user.save();
-    })
-        .then((user) => {
-        res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
-            status: true,
-            message: "User created successfully",
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                approved: user.approved,
-            },
+        return user.save().then((savedUser) => {
+            // ✅ Send credentials via email
+            const mailOptions = {
+                from: process.env.SMTP_MAIL,
+                to: savedUser.email,
+                subject: "Your LMS Account Credentials",
+                html: `
+            <p>Hello ${savedUser.name},</p>
+            <p>Your account has been created by the admin.</p>
+            <p><strong>Email:</strong> ${savedUser.email}</p>
+            <p><strong>Password:</strong> ${password}</p>
+            <p><strong>Role:</strong> ${savedUser.role}</p>
+            <br/>
+            <p>You can now login to the platform.</p>
+          `,
+            };
+            transporter.sendMail(mailOptions, (err, info) => {
+                if (err) {
+                    // console.error("Email sending failed:", err);
+                }
+                else {
+                    // console.log("Email sent:", info.response);
+                }
+            });
+            res.status(ResponseCode_1.ResponseCode.SUCCESS).json({
+                status: true,
+                message: `User with role '${role}' created successfully. Credentials sent to email.`,
+                user: {
+                    id: savedUser._id,
+                    name: savedUser.name,
+                    email: savedUser.email,
+                    role: savedUser.role,
+                    approved: savedUser.approved,
+                },
+            });
         });
     })
         .catch((error) => {
+        console.error("Error creating user by admin:", error);
         if (error !== "Email already exists") {
             res
                 .status(ResponseCode_1.ResponseCode.SERVER_ERROR)
@@ -513,6 +613,7 @@ const createUserByAdmin = (req, res) => {
         }
     });
 };
+exports.createUserByAdmin = createUserByAdmin;
 //Logout Controller
 const logout = (req, res) => {
     res.clearCookie("token");
@@ -655,7 +756,7 @@ exports.default = {
     getApprovedUsers,
     getPendingUsers,
     RejectUsers,
-    createUserByAdmin,
+    createUserByAdmin: exports.createUserByAdmin,
     logout,
     updateUserProfile: exports.updateUserProfile,
 };
